@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
 const products = [
   { id: 'p1', name: 'Product 1', price: '$29.99', file: '/models/model1.glb' },
@@ -53,23 +54,36 @@ function initThreeViewer(id, modelPath) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+
+  // 1. Enable HDR Tone Mapping
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.0;
+  
   container.appendChild(renderer.domElement);
 
-  // Balanced lights
-  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 2.0);
-  scene.add(hemiLight);
+  // 2. Load HDRI Environment Map for Realistic Reflections & Studio Lighting
+  const rgbeLoader = new RGBELoader();
+  rgbeLoader.load(
+    'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
+    (texture) => {
+      texture.mapping = THREE.EquirectangularReflectionMapping;
+      scene.environment = texture;
+    },
+    undefined,
+    (err) => console.error('Error loading HDRI lighting:', err)
+  );
 
-  const dirLight1 = new THREE.DirectionalLight(0xffffff, 2.5);
-  dirLight1.position.set(5, 10, 7.5);
-  scene.add(dirLight1);
-
-  const dirLight2 = new THREE.DirectionalLight(0xffffff, 1.5);
-  dirLight2.position.set(-5, -5, -5);
-  scene.add(dirLight2);
-
+  // 3. Orbit Controls: Restricted strictly to Left / Right rotation
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
+
+  // Lock vertical rotation (up / down) completely
+  controls.minPolarAngle = Math.PI / 2;
+  controls.maxPolarAngle = Math.PI / 2;
+
+  // Prevent drag panning away from center
+  controls.enablePan = false;
 
   let loadedModel = null;
 
@@ -79,7 +93,6 @@ function initThreeViewer(id, modelPath) {
     (gltf) => {
       loadedModel = gltf.scene;
 
-      // Group wrapper ensures clean centering and scaling
       const wrapper = new THREE.Group();
       wrapper.add(loadedModel);
 
