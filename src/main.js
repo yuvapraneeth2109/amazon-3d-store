@@ -11,13 +11,8 @@ const products = [
   { id: 'p5', name: 'Product 5', price: '$199.99', file: '/models/model5.glb' },
 ];
 
-const textureBatches = [
-  { id: 'b1', name: 'Batch 1', path: '/textures/batch1', prefix: 'Fabric_Mat_A' },
-  { id: 'b2', name: 'Batch 2', path: '/textures/batch2', prefix: 'Fabric_Mat_B' },
-  { id: 'b3', name: 'Batch 3', path: '/textures/batch3', prefix: 'Fabric_Mat_C' },
-  { id: 'b4', name: 'Batch 4', path: '/textures/batch4', prefix: 'Fabric_Mat_D' },
-  { id: 'b5', name: 'Batch 5', path: '/textures/batch5', prefix: 'Fabric_Mat_E' },
-  { id: 'b6', name: 'Batch 6', path: '/textures/batch6', prefix: 'Fabric_Mat_F' },
+const textureOptions = [
+  { id: 'custom', name: 'Custom Finish', path: '/textures/custom' },
 ];
 
 const grid = document.getElementById('product-grid');
@@ -27,14 +22,13 @@ products.forEach((prod) => {
   const card = document.createElement('div');
   card.className = 'card';
   
-  const swatchesHTML = textureBatches
-    .map((batch, index) => `
+  const swatchesHTML = textureOptions
+    .map((opt, index) => `
       <button 
         class="swatch ${index === 0 ? 'active' : ''}" 
-        style="background-image: url('${batch.path}/${batch.prefix}_BaseColor.jpg')" 
-        data-path="${batch.path}"
-        data-prefix="${batch.prefix}"
-        title="${batch.name}">
+        style="background-image: url('${opt.path}/basecolor.jpg')" 
+        data-path="${opt.path}"
+        title="${opt.name}">
       </button>`)
     .join('');
 
@@ -76,6 +70,7 @@ function initThreeViewer(id, modelPath) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
+  // Lighting
   const rgbeLoader = new RGBELoader();
   rgbeLoader.load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
@@ -96,6 +91,7 @@ function initThreeViewer(id, modelPath) {
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
 
+  // Shadow Ground
   const shadowPlaneGeo = new THREE.PlaneGeometry(10, 10);
   const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.35 });
   const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
@@ -113,8 +109,9 @@ function initThreeViewer(id, modelPath) {
 
   let loadedModel = null;
   const fabricMeshes = [];
+  const metalMeshes = [];
 
-  function configureTexture(tex, isColor = false) {
+  function prepTexture(tex, isColor = false) {
     tex.flipY = false;
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
@@ -124,56 +121,46 @@ function initThreeViewer(id, modelPath) {
     return tex;
   }
 
-  async function applyPBRBatch(batchPath, prefix) {
-    if (!loadedModel || fabricMeshes.length === 0) return;
+  async function applyCustomTextures(folderPath) {
+    if (!loadedModel) return;
 
     try {
-      const baseColorPath = `${batchPath}/${prefix}_BaseColor.jpg`;
-      const normalPath = `${batchPath}/${prefix}_Normal.jpg`;
-      const ormPath = `${batchPath}/${prefix}_ORM.jpg`; // Uses packed texture if available
-      const roughnessPath = `${batchPath}/${prefix}_Roughness.jpg`;
-      const metallicPath = `${batchPath}/${prefix}_Metallic.jpg`;
+      const [baseColorMap, fabricNormalMap, roughnessMap, metallicMap] = await Promise.all([
+        textureLoader.loadAsync(`${folderPath}/basecolor.jpg`),
+        textureLoader.loadAsync(`${folderPath}/fabric.jpg`),
+        textureLoader.loadAsync(`${folderPath}/roughness.jpg`),
+        textureLoader.loadAsync(`${folderPath}/metallic.jpg`),
+      ]);
 
-      const baseColorMap = await textureLoader.loadAsync(baseColorPath);
-      configureTexture(baseColorMap, true);
+      prepTexture(baseColorMap, true);
+      prepTexture(fabricNormalMap, false);
+      prepTexture(roughnessMap, false);
+      prepTexture(metallicMap, false);
 
-      const normalMap = await textureLoader.loadAsync(normalPath);
-      configureTexture(normalMap, false);
-
-      let roughnessMap, metallicMap, aoMap;
-
-      // Check if packed ORM texture exists, fallback to individual maps
-      try {
-        const ormMap = await textureLoader.loadAsync(ormPath);
-        configureTexture(ormMap, false);
-        aoMap = ormMap;
-        roughnessMap = ormMap;
-        metallicMap = ormMap;
-      } catch {
-        roughnessMap = await textureLoader.loadAsync(roughnessPath);
-        metallicMap = await textureLoader.loadAsync(metallicPath);
-        configureTexture(roughnessMap, false);
-        configureTexture(metallicMap, false);
-      }
-
+      // Apply fabric maps to sofa body
       fabricMeshes.forEach((mesh) => {
-        const mat = mesh.material;
-        mat.color.setHex(0xffffff); // Clear base color multiplier
-        mat.map = baseColorMap;
-        mat.normalMap = normalMap;
-        mat.roughnessMap = roughnessMap;
-        mat.metalnessMap = metallicMap;
-        if (aoMap) mat.aoMap = aoMap;
+        mesh.material.color.setHex(0xffffff);
+        mesh.material.map = baseColorMap;
+        mesh.material.normalMap = fabricNormalMap;
+        mesh.material.roughnessMap = roughnessMap;
+        mesh.material.metalness = 0.0;
+        mesh.material.roughness = 0.85;
+        mesh.material.needsUpdate = true;
+      });
 
-        mat.metalness = 1.0;
-        mat.roughness = 1.0;
-        mat.needsUpdate = true;
+      // Apply metallic map strictly to metal frame parts
+      metalMeshes.forEach((mesh) => {
+        mesh.material.metalnessMap = metallicMap;
+        mesh.material.metalness = 1.0;
+        mesh.material.roughness = 0.2;
+        mesh.material.needsUpdate = true;
       });
     } catch (err) {
-      console.error('Error applying batch texture:', err);
+      console.error('Error applying textures:', err);
     }
   }
 
+  // Load GLB
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
@@ -181,14 +168,16 @@ function initThreeViewer(id, modelPath) {
       loadedModel = gltf.scene;
 
       loadedModel.traverse((child) => {
-        if (child.isMesh) {
+        if (child.isMesh && child.material) {
           child.castShadow = true;
           child.receiveShadow = true;
+          child.material = child.material.clone();
 
-          // Identify fabric surfaces (filter out small metal frame/legs)
-          if (child.material && child.geometry.attributes.position.count > 100) {
-            child.material = child.material.clone(); // Clone material per mesh
+          // Mesh threshold: Large meshes = Sofa Fabric, Small meshes = Metal Frame/Legs
+          if (child.geometry.attributes.position.count > 500) {
             fabricMeshes.push(child);
+          } else {
+            metalMeshes.push(child);
           }
         }
       });
@@ -212,6 +201,9 @@ function initThreeViewer(id, modelPath) {
       const modelHeight = scaledBox.max.y - scaledBox.min.y;
       controls.target.set(0, modelHeight / 2, 0);
       controls.update();
+
+      // Initial texture load
+      applyCustomTextures('/textures/custom');
     },
     undefined,
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
@@ -222,12 +214,9 @@ function initThreeViewer(id, modelPath) {
     const target = e.target.closest('.swatch');
     if (!target) return;
 
-    const batchPath = target.getAttribute('data-path');
-    const prefix = target.getAttribute('data-prefix');
-    if (batchPath && prefix) {
-      swatchContainer.querySelectorAll('.swatch').forEach((btn) => btn.classList.remove('active'));
-      target.classList.add('active');
-      applyPBRBatch(batchPath, prefix);
+    const folderPath = target.getAttribute('data-path');
+    if (folderPath) {
+      applyCustomTextures(folderPath);
     }
   });
 
