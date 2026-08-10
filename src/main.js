@@ -23,6 +23,7 @@ const textureBatches = [
 const grid = document.getElementById('product-grid');
 const textureLoader = new THREE.TextureLoader();
 
+// Render product cards and swatch buttons
 products.forEach((prod) => {
   const card = document.createElement('div');
   card.className = 'card';
@@ -76,6 +77,7 @@ function initThreeViewer(id, modelPath) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
+  // Environment HDRI Lighting
   const rgbeLoader = new RGBELoader();
   rgbeLoader.load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
@@ -85,6 +87,7 @@ function initThreeViewer(id, modelPath) {
     }
   );
 
+  // Key Shadow Light
   const shadowLight = new THREE.DirectionalLight(0xffffff, 1.2);
   shadowLight.position.set(2, 4, 2);
   shadowLight.castShadow = true;
@@ -96,6 +99,7 @@ function initThreeViewer(id, modelPath) {
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
 
+  // Ground Contact Shadow Catcher
   const shadowPlaneGeo = new THREE.PlaneGeometry(10, 10);
   const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.25 });
   const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
@@ -113,55 +117,53 @@ function initThreeViewer(id, modelPath) {
 
   let loadedModel = null;
 
-  function configureTexture(tex) {
-    if (!tex) return;
-    tex.flipY = false;
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    tex.needsUpdate = true;
+  // Helper to format texture coordinates for GLTF models
+  function setupPBRTexture(texture, isColor = false) {
+    texture.flipY = false;
+    texture.wrapS = THREE.RepeatWrapping;
+    texture.wrapT = THREE.RepeatWrapping;
+    if (isColor) {
+      texture.colorSpace = THREE.SRGBColorSpace;
+    }
+    return texture;
   }
 
-  function applyTextureBatch(batchPath, prefix) {
+  // Atomic PBR Texture Loader: Loads all 4 maps together before applying
+  async function applyFullPBRBatch(batchPath, prefix) {
     if (!loadedModel) return;
 
-    const baseColorPath = `${batchPath}/${prefix}_BaseColor.jpg`;
-    const metallicPath = `${batchPath}/${prefix}_Metallic.jpg`;
-    const normalPath = `${batchPath}/${prefix}_Normal.jpg`;
-    const roughnessPath = `${batchPath}/${prefix}_Roughness.jpg`;
+    try {
+      const [baseColorMap, metallicMap, normalMap, roughnessMap] = await Promise.all([
+        textureLoader.loadAsync(`${batchPath}/${prefix}_BaseColor.jpg`),
+        textureLoader.loadAsync(`${batchPath}/${prefix}_Metallic.jpg`),
+        textureLoader.loadAsync(`${batchPath}/${prefix}_Normal.jpg`),
+        textureLoader.loadAsync(`${batchPath}/${prefix}_Roughness.jpg`),
+      ]);
 
-    textureLoader.load(baseColorPath, (baseColorMap) => {
-      baseColorMap.colorSpace = THREE.SRGBColorSpace;
-      configureTexture(baseColorMap);
-
-      const metallicMap = textureLoader.load(metallicPath, (t) => configureTexture(t));
-      const normalMap = textureLoader.load(normalPath, (t) => configureTexture(t));
-      const roughnessMap = textureLoader.load(roughnessPath, (t) => configureTexture(t));
+      setupPBRTexture(baseColorMap, true);
+      setupPBRTexture(metallicMap, false);
+      setupPBRTexture(normalMap, false);
+      setupPBRTexture(roughnessMap, false);
 
       loadedModel.traverse((child) => {
-        if (child.isMesh) {
-          if (child.material) {
-            child.material.map = baseColorMap;
-            child.material.normalMap = normalMap;
-            child.material.roughnessMap = roughnessMap;
-            child.material.metalnessMap = metallicMap;
-            child.material.metalness = 0.0;
-            child.material.roughness = 0.85;
-            child.material.needsUpdate = true;
-          } else {
-            child.material = new THREE.MeshStandardMaterial({
-              map: baseColorMap,
-              normalMap: normalMap,
-              roughnessMap: roughnessMap,
-              metalnessMap: metallicMap,
-              metalness: 0.0,
-              roughness: 0.85,
-            });
-          }
+        if (child.isMesh && child.material) {
+          child.material.map = baseColorMap;
+          child.material.metalnessMap = metallicMap;
+          child.material.normalMap = normalMap;
+          child.material.roughnessMap = roughnessMap;
+          
+          // Allow PBR maps to control surface properties
+          child.material.metalness = 1.0;
+          child.material.roughness = 1.0;
+          child.material.needsUpdate = true;
         }
       });
-    });
+    } catch (error) {
+      console.error(`Error loading PBR batch set from ${batchPath}:`, error);
+    }
   }
 
+  // Load GLB Model
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
@@ -199,6 +201,7 @@ function initThreeViewer(id, modelPath) {
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
+  // Swatch click event listener
   const swatchContainer = document.getElementById(`swatches-${id}`);
   swatchContainer.addEventListener('click', (e) => {
     const target = e.target.closest('.swatch');
@@ -209,7 +212,7 @@ function initThreeViewer(id, modelPath) {
     if (batchPath && prefix) {
       swatchContainer.querySelectorAll('.swatch').forEach((btn) => btn.classList.remove('active'));
       target.classList.add('active');
-      applyTextureBatch(batchPath, prefix);
+      applyFullPBRBatch(batchPath, prefix);
     }
   });
 
