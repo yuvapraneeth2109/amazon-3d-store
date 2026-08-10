@@ -70,7 +70,7 @@ function initThreeViewer(id, modelPath) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Lighting
+  // Studio Lighting
   const rgbeLoader = new RGBELoader();
   rgbeLoader.load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
@@ -91,7 +91,7 @@ function initThreeViewer(id, modelPath) {
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
 
-  // Shadow Ground
+  // Shadow Floor
   const shadowPlaneGeo = new THREE.PlaneGeometry(10, 10);
   const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.35 });
   const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
@@ -135,24 +135,29 @@ function initThreeViewer(id, modelPath) {
       prepTexture(baseColorMap, true);
       prepTexture(fabricNormalMap, false);
       prepTexture(roughnessMap, false);
-      prepTexture(metallicMap, false);
+      prepTexture(metallicMap, true);
 
-      // Apply fabric maps to sofa body
+      // 1. SOFA FABRIC BODY: Assigns basecolor.jpg, fabric.jpg, roughness.jpg
       fabricMeshes.forEach((mesh) => {
         mesh.material.color.setHex(0xffffff);
         mesh.material.map = baseColorMap;
         mesh.material.normalMap = fabricNormalMap;
         mesh.material.roughnessMap = roughnessMap;
+        mesh.material.metalnessMap = null;
         mesh.material.metalness = 0.0;
         mesh.material.roughness = 0.85;
         mesh.material.needsUpdate = true;
       });
 
-      // Apply metallic map strictly to metal frame parts
+      // 2. METAL PARTS: Assigns metallic.jpg strictly (removes fabric basecolor)
       metalMeshes.forEach((mesh) => {
+        mesh.material.color.setHex(0xffffff);
+        mesh.material.map = metallicMap; // Metallic texture applied as map
         mesh.material.metalnessMap = metallicMap;
+        mesh.material.normalMap = null;
+        mesh.material.roughnessMap = null;
         mesh.material.metalness = 1.0;
-        mesh.material.roughness = 0.2;
+        mesh.material.roughness = 0.25;
         mesh.material.needsUpdate = true;
       });
     } catch (err) {
@@ -160,7 +165,7 @@ function initThreeViewer(id, modelPath) {
     }
   }
 
-  // Load GLB
+  // Load GLB Model
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
@@ -173,11 +178,14 @@ function initThreeViewer(id, modelPath) {
           child.receiveShadow = true;
           child.material = child.material.clone();
 
-          // Mesh threshold: Large meshes = Sofa Fabric, Small meshes = Metal Frame/Legs
-          if (child.geometry.attributes.position.count > 500) {
-            fabricMeshes.push(child);
-          } else {
+          // Mesh filter: detect metal legs/frame vs sofa fabric
+          const nameStr = (child.name + ' ' + (child.material.name || '')).toLowerCase();
+          const isMetalKeyword = nameStr.includes('metal') || nameStr.includes('leg') || nameStr.includes('frame') || nameStr.includes('chrome') || nameStr.includes('feet');
+          
+          if (isMetalKeyword || child.geometry.attributes.position.count < 1500) {
             metalMeshes.push(child);
+          } else {
+            fabricMeshes.push(child);
           }
         }
       });
@@ -202,7 +210,7 @@ function initThreeViewer(id, modelPath) {
       controls.target.set(0, modelHeight / 2, 0);
       controls.update();
 
-      // Initial texture load
+      // Apply textures to fabric and metal
       applyCustomTextures('/textures/custom');
     },
     undefined,
