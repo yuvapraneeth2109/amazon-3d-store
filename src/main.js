@@ -23,7 +23,6 @@ const textureBatches = [
 const grid = document.getElementById('product-grid');
 const textureLoader = new THREE.TextureLoader();
 
-// Render product cards and swatch buttons
 products.forEach((prod) => {
   const card = document.createElement('div');
   card.className = 'card';
@@ -66,7 +65,7 @@ function initThreeViewer(id, modelPath) {
   scene.background = new THREE.Color(0xf8f9fa);
 
   const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
-  camera.position.set(0, 1.2, 3.2);
+  camera.position.set(0, 0.5, 3.0);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(width, height);
@@ -77,7 +76,7 @@ function initThreeViewer(id, modelPath) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Environment HDRI Lighting
+  // Lighting Setup
   const rgbeLoader = new RGBELoader();
   rgbeLoader.load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
@@ -87,7 +86,6 @@ function initThreeViewer(id, modelPath) {
     }
   );
 
-  // Key Shadow Light
   const shadowLight = new THREE.DirectionalLight(0xffffff, 1.2);
   shadowLight.position.set(2, 4, 2);
   shadowLight.castShadow = true;
@@ -99,7 +97,7 @@ function initThreeViewer(id, modelPath) {
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
   scene.add(ambientLight);
 
-  // Ground Contact Shadow Catcher
+  // Ground Shadow Floor
   const shadowPlaneGeo = new THREE.PlaneGeometry(10, 10);
   const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.25 });
   const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
@@ -108,16 +106,17 @@ function initThreeViewer(id, modelPath) {
   shadowPlane.receiveShadow = true;
   scene.add(shadowPlane);
 
+  // Orbit Controls locked to exact scene origin (0, 0, 0)
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
+  controls.target.set(0, 0, 0);
   controls.minPolarAngle = 0;
   controls.maxPolarAngle = Math.PI / 2;
   controls.enablePan = false;
 
   let loadedModel = null;
 
-  // Helper to format texture coordinates for GLTF models
   function setupPBRTexture(texture, isColor = false) {
     texture.flipY = false;
     texture.wrapS = THREE.RepeatWrapping;
@@ -128,7 +127,6 @@ function initThreeViewer(id, modelPath) {
     return texture;
   }
 
-  // Atomic PBR Texture Loader: Loads all 4 maps together before applying
   async function applyFullPBRBatch(batchPath, prefix) {
     if (!loadedModel) return;
 
@@ -147,14 +145,21 @@ function initThreeViewer(id, modelPath) {
 
       loadedModel.traverse((child) => {
         if (child.isMesh && child.material) {
+          // Retain original sub-mesh UV tiling if present
+          const existingRepeat = child.material.map ? child.material.map.repeat : new THREE.Vector2(1, 1);
+          
+          [baseColorMap, metallicMap, normalMap, roughnessMap].forEach(t => {
+            if (t) t.repeat.copy(existingRepeat);
+          });
+
           child.material.map = baseColorMap;
-          child.material.metalnessMap = metallicMap;
           child.material.normalMap = normalMap;
           child.material.roughnessMap = roughnessMap;
+          child.material.metalnessMap = metallicMap;
           
-          // Allow PBR maps to control surface properties
-          child.material.metalness = 1.0;
-          child.material.roughness = 1.0;
+          // Non-metallic fabric values to prevent chrome/metallic dark patches
+          child.material.metalness = 0.0;
+          child.material.roughness = 0.85;
           child.material.needsUpdate = true;
         }
       });
@@ -163,7 +168,7 @@ function initThreeViewer(id, modelPath) {
     }
   }
 
-  // Load GLB Model
+  // Load Model & Center Pivot Point Exactly
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
@@ -177,31 +182,35 @@ function initThreeViewer(id, modelPath) {
         }
       });
 
-      const wrapper = new THREE.Group();
-      wrapper.add(loadedModel);
-
+      // Calculate tight bounding box of geometry
       const box = new THREE.Box3().setFromObject(loadedModel);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
 
+      // Offset internal mesh so geometric center sits directly at (0, 0, 0)
       loadedModel.position.set(-center.x, -center.y, -center.z);
 
+      const wrapper = new THREE.Group();
+      wrapper.add(loadedModel);
+
+      // Scale model predictably into viewing space
       const maxDim = Math.max(size.x, size.y, size.z);
       if (maxDim > 0) {
         const scale = 1.8 / maxDim;
         wrapper.scale.set(scale, scale, scale);
       }
 
-      const updatedBox = new THREE.Box3().setFromObject(wrapper);
-      wrapper.position.y = -updatedBox.min.y;
-
       scene.add(wrapper);
+
+      // Lock controls target to origin and refresh camera lookAt
+      controls.target.set(0, 0, 0);
+      controls.update();
     },
     undefined,
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
-  // Swatch click event listener
+  // Swatch click logic
   const swatchContainer = document.getElementById(`swatches-${id}`);
   swatchContainer.addEventListener('click', (e) => {
     const target = e.target.closest('.swatch');
