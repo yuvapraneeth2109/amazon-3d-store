@@ -136,7 +136,7 @@ function initThreeViewer(id, modelPath) {
       prepTexture(roughnessMap, false);
       prepTexture(metallicMap, true);
 
-      // Apply fabric maps strictly to fabric slots
+      // 1. Apply fabric textures to all soft cushion / frame slots (Fabric_Mat_A through F)
       fabricMaterialSlots.forEach((mat) => {
         mat.color.setHex(0xffffff);
         mat.map = baseColorMap;
@@ -148,13 +148,13 @@ function initThreeViewer(id, modelPath) {
         mat.needsUpdate = true;
       });
 
-      // Apply metallic.jpg strictly to metal slots
+      // 2. Apply metallic texture to hardware / mechanism / leg slots (Fabric_Mat_G)
       metalMaterialSlots.forEach((mat) => {
         mat.color.setHex(0xffffff);
         mat.map = metallicMap;
         mat.metalnessMap = metallicMap;
         mat.normalMap = null;
-        mat.roughnessMap = null;
+        mat.roughnessMap = roughnessMap;
         mat.metalness = 1.0;
         mat.roughness = 0.25;
         mat.needsUpdate = true;
@@ -164,7 +164,7 @@ function initThreeViewer(id, modelPath) {
     }
   }
 
-  // Load Model with Full Structural Diagnostics
+  // Load Model with Exact Material Mapping
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
@@ -185,7 +185,7 @@ function initThreeViewer(id, modelPath) {
           console.log(`[Mesh #${meshCount}] Name: "${child.name}" | Vertices: ${child.geometry.attributes.position.count} | Materials: ${materials.length}`);
 
           materials.forEach((mat, idx) => {
-            // Clone material to avoid cross-instance pollution
+            // Clone material to prevent cross-instance leakage
             const clonedMat = mat.clone();
             if (Array.isArray(child.material)) {
               child.material[idx] = clonedMat;
@@ -193,27 +193,29 @@ function initThreeViewer(id, modelPath) {
               child.material = clonedMat;
             }
 
-            const matName = (clonedMat.name || '').toLowerCase();
+            const rawMatName = clonedMat.name || '';
+            const matName = rawMatName.toLowerCase();
             const meshName = (child.name || '').toLowerCase();
             const fullIdentifier = `${meshName} ${matName}`;
 
-            console.log(`   └─ [Material Slot ${idx}] Name: "${clonedMat.name}"`);
+            console.log(`   └─ [Material Slot ${idx}] Name: "${rawMatName}"`);
 
-            // Flexible Multi-Criteria Classifier
-            const isMetal = fullIdentifier.includes('metal') ||
+            // Check exact glTF slot names first, then fall back to keyword checking
+            const isMetal = rawMatName === 'Fabric_Mat_G' ||
+                            fullIdentifier.includes('metal') ||
                             fullIdentifier.includes('leg') ||
                             fullIdentifier.includes('frame') ||
                             fullIdentifier.includes('chrome') ||
-                            fullIdentifier.includes('feet') ||
-                            fullIdentifier.includes('base') ||
-                            fullIdentifier.includes('steel') ||
+                            fullIdentifier.includes('mechanism') ||
+                            fullIdentifier.includes('handle') ||
+                            fullIdentifier.includes('logo') ||
                             clonedMat.metalness > 0.3;
 
             if (isMetal) {
-              console.log(`      ↳ CLASSIFIED AS: METAL`);
+              console.log(`      ↳ CLASSIFIED AS: METAL / HARDWARE (${rawMatName})`);
               metalMaterialSlots.push(clonedMat);
             } else {
-              console.log(`      ↳ CLASSIFIED AS: FABRIC`);
+              console.log(`      ↳ CLASSIFIED AS: FABRIC / CUSHION (${rawMatName})`);
               fabricMaterialSlots.push(clonedMat);
             }
           });
@@ -223,6 +225,7 @@ function initThreeViewer(id, modelPath) {
       console.log(`Summary: ${fabricMaterialSlots.length} Fabric Slot(s), ${metalMaterialSlots.length} Metal Slot(s) detected.`);
       console.groupEnd();
 
+      // Auto-center and fit model inside canvas bounding box
       const box = new THREE.Box3().setFromObject(loadedModel);
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
@@ -243,16 +246,21 @@ function initThreeViewer(id, modelPath) {
       controls.target.set(0, modelHeight / 2, 0);
       controls.update();
 
+      // Apply uploaded textures upon load
       applyCustomTextures('/textures/custom');
     },
     undefined,
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
+  // Swatch Click Listener
   const swatchContainer = document.getElementById(`swatches-${id}`);
   swatchContainer.addEventListener('click', (e) => {
     const target = e.target.closest('.swatch');
     if (!target) return;
+
+    swatchContainer.querySelectorAll('.swatch').forEach(btn => btn.classList.remove('active'));
+    target.classList.add('active');
 
     const folderPath = target.getAttribute('data-path');
     if (folderPath) {
