@@ -134,28 +134,28 @@ function initThreeViewer(id, modelPath) {
       prepTexture(baseColorMap, true);
       prepTexture(fabricNormalMap, false);
       prepTexture(roughnessMap, false);
-      prepTexture(metallicMap, true);
+      prepTexture(metallicMap, false);
 
-      // 1. Apply fabric textures to all soft cushion / frame slots (Fabric_Mat_A through F)
+      // 1. ALL SOFA BODY PARTS (Fabric_Mat_A through F): Base color + Fabric Normal
       fabricMaterialSlots.forEach((mat) => {
         mat.color.setHex(0xffffff);
         mat.map = baseColorMap;
         mat.normalMap = fabricNormalMap;
         mat.roughnessMap = roughnessMap;
         mat.metalnessMap = null;
-        mat.metalness = 0.0;
+        mat.metalness = 0.0; // Strictly non-metallic
         mat.roughness = 0.85;
         mat.needsUpdate = true;
       });
 
-      // 2. Apply metallic texture to hardware / mechanism / leg slots (Fabric_Mat_G)
+      // 2. ONLY LOGO, HANDLE & MECHANISM (Fabric_Mat_G): Metallic
       metalMaterialSlots.forEach((mat) => {
         mat.color.setHex(0xffffff);
         mat.map = metallicMap;
         mat.metalnessMap = metallicMap;
         mat.normalMap = null;
         mat.roughnessMap = roughnessMap;
-        mat.metalness = 1.0;
+        mat.metalness = 1.0; // Pure metallic finish
         mat.roughness = 0.25;
         mat.needsUpdate = true;
       });
@@ -164,7 +164,7 @@ function initThreeViewer(id, modelPath) {
     }
   }
 
-  // Load Model with Exact Material Mapping
+  // Load Model and Classify Materials
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
@@ -182,10 +182,7 @@ function initThreeViewer(id, modelPath) {
 
           const materials = Array.isArray(child.material) ? child.material : [child.material];
 
-          console.log(`[Mesh #${meshCount}] Name: "${child.name}" | Vertices: ${child.geometry.attributes.position.count} | Materials: ${materials.length}`);
-
           materials.forEach((mat, idx) => {
-            // Clone material to prevent cross-instance leakage
             const clonedMat = mat.clone();
             if (Array.isArray(child.material)) {
               child.material[idx] = clonedMat;
@@ -196,36 +193,29 @@ function initThreeViewer(id, modelPath) {
             const rawMatName = clonedMat.name || '';
             const matName = rawMatName.toLowerCase();
             const meshName = (child.name || '').toLowerCase();
-            const fullIdentifier = `${meshName} ${matName}`;
 
-            console.log(`   └─ [Material Slot ${idx}] Name: "${rawMatName}"`);
-
-            // Check exact glTF slot names first, then fall back to keyword checking
+            // Strict target: ONLY logo, handle, and mechanism are metal (Fabric_Mat_G)
             const isMetal = rawMatName === 'Fabric_Mat_G' ||
-                            fullIdentifier.includes('metal') ||
-                            fullIdentifier.includes('leg') ||
-                            fullIdentifier.includes('frame') ||
-                            fullIdentifier.includes('chrome') ||
-                            fullIdentifier.includes('mechanism') ||
-                            fullIdentifier.includes('handle') ||
-                            fullIdentifier.includes('logo') ||
-                            clonedMat.metalness > 0.3;
+                            matName.includes('mechanism') ||
+                            matName.includes('logo') ||
+                            matName.includes('handle') ||
+                            meshName.includes('fg_logo') ||
+                            meshName.includes('fg_mechanism');
 
             if (isMetal) {
-              console.log(`      ↳ CLASSIFIED AS: METAL / HARDWARE (${rawMatName})`);
+              console.log(`[Mesh #${meshCount}] ${child.name} -> METAL (${rawMatName})`);
               metalMaterialSlots.push(clonedMat);
             } else {
-              console.log(`      ↳ CLASSIFIED AS: FABRIC / CUSHION (${rawMatName})`);
+              console.log(`[Mesh #${meshCount}] ${child.name} -> FABRIC BASECOLOR (${rawMatName})`);
               fabricMaterialSlots.push(clonedMat);
             }
           });
         }
       });
 
-      console.log(`Summary: ${fabricMaterialSlots.length} Fabric Slot(s), ${metalMaterialSlots.length} Metal Slot(s) detected.`);
       console.groupEnd();
 
-      // Auto-center and fit model inside canvas bounding box
+      // Auto-center and fit model
       const box = new THREE.Box3().setFromObject(loadedModel);
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
@@ -246,14 +236,12 @@ function initThreeViewer(id, modelPath) {
       controls.target.set(0, modelHeight / 2, 0);
       controls.update();
 
-      // Apply uploaded textures upon load
       applyCustomTextures('/textures/custom');
     },
     undefined,
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
-  // Swatch Click Listener
   const swatchContainer = document.getElementById(`swatches-${id}`);
   swatchContainer.addEventListener('click', (e) => {
     const target = e.target.closest('.swatch');
