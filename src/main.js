@@ -70,7 +70,7 @@ function initThreeViewer(id, modelPath) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Studio Lighting
+  // Studio HDRI Lighting
   const rgbeLoader = new RGBELoader();
   rgbeLoader.load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
@@ -91,7 +91,6 @@ function initThreeViewer(id, modelPath) {
   const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
 
-  // Shadow Floor
   const shadowPlaneGeo = new THREE.PlaneGeometry(10, 10);
   const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.35 });
   const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
@@ -108,8 +107,8 @@ function initThreeViewer(id, modelPath) {
   controls.enablePan = false;
 
   let loadedModel = null;
-  const fabricMeshes = [];
-  const metalMeshes = [];
+  const fabricMaterialSlots = [];
+  const metalMaterialSlots = [];
 
   function prepTexture(tex, isColor = false) {
     tex.flipY = false;
@@ -137,58 +136,92 @@ function initThreeViewer(id, modelPath) {
       prepTexture(roughnessMap, false);
       prepTexture(metallicMap, true);
 
-      // 1. SOFA FABRIC BODY: Assigns basecolor.jpg, fabric.jpg, roughness.jpg
-      fabricMeshes.forEach((mesh) => {
-        mesh.material.color.setHex(0xffffff);
-        mesh.material.map = baseColorMap;
-        mesh.material.normalMap = fabricNormalMap;
-        mesh.material.roughnessMap = roughnessMap;
-        mesh.material.metalnessMap = null;
-        mesh.material.metalness = 0.0;
-        mesh.material.roughness = 0.85;
-        mesh.material.needsUpdate = true;
+      // Apply fabric maps strictly to fabric slots
+      fabricMaterialSlots.forEach((mat) => {
+        mat.color.setHex(0xffffff);
+        mat.map = baseColorMap;
+        mat.normalMap = fabricNormalMap;
+        mat.roughnessMap = roughnessMap;
+        mat.metalnessMap = null;
+        mat.metalness = 0.0;
+        mat.roughness = 0.85;
+        mat.needsUpdate = true;
       });
 
-      // 2. METAL PARTS: Assigns metallic.jpg strictly (removes fabric basecolor)
-      metalMeshes.forEach((mesh) => {
-        mesh.material.color.setHex(0xffffff);
-        mesh.material.map = metallicMap; // Metallic texture applied as map
-        mesh.material.metalnessMap = metallicMap;
-        mesh.material.normalMap = null;
-        mesh.material.roughnessMap = null;
-        mesh.material.metalness = 1.0;
-        mesh.material.roughness = 0.25;
-        mesh.material.needsUpdate = true;
+      // Apply metallic.jpg strictly to metal slots
+      metalMaterialSlots.forEach((mat) => {
+        mat.color.setHex(0xffffff);
+        mat.map = metallicMap;
+        mat.metalnessMap = metallicMap;
+        mat.normalMap = null;
+        mat.roughnessMap = null;
+        mat.metalness = 1.0;
+        mat.roughness = 0.25;
+        mat.needsUpdate = true;
       });
     } catch (err) {
       console.error('Error applying textures:', err);
     }
   }
 
-  // Load GLB Model
+  // Load Model with Full Structural Diagnostics
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
     (gltf) => {
       loadedModel = gltf.scene;
 
+      console.group(`--- DIAGNOSTIC ANALYSIS FOR MODEL: ${modelPath} ---`);
+      let meshCount = 0;
+
       loadedModel.traverse((child) => {
-        if (child.isMesh && child.material) {
+        if (child.isMesh) {
+          meshCount++;
           child.castShadow = true;
           child.receiveShadow = true;
-          child.material = child.material.clone();
 
-          // Mesh filter: detect metal legs/frame vs sofa fabric
-          const nameStr = (child.name + ' ' + (child.material.name || '')).toLowerCase();
-          const isMetalKeyword = nameStr.includes('metal') || nameStr.includes('leg') || nameStr.includes('frame') || nameStr.includes('chrome') || nameStr.includes('feet');
-          
-          if (isMetalKeyword || child.geometry.attributes.position.count < 1500) {
-            metalMeshes.push(child);
-          } else {
-            fabricMeshes.push(child);
-          }
+          const materials = Array.isArray(child.material) ? child.material : [child.material];
+
+          console.log(`[Mesh #${meshCount}] Name: "${child.name}" | Vertices: ${child.geometry.attributes.position.count} | Materials: ${materials.length}`);
+
+          materials.forEach((mat, idx) => {
+            // Clone material to avoid cross-instance pollution
+            const clonedMat = mat.clone();
+            if (Array.isArray(child.material)) {
+              child.material[idx] = clonedMat;
+            } else {
+              child.material = clonedMat;
+            }
+
+            const matName = (clonedMat.name || '').toLowerCase();
+            const meshName = (child.name || '').toLowerCase();
+            const fullIdentifier = `${meshName} ${matName}`;
+
+            console.log(`   └─ [Material Slot ${idx}] Name: "${clonedMat.name}"`);
+
+            // Flexible Multi-Criteria Classifier
+            const isMetal = fullIdentifier.includes('metal') ||
+                            fullIdentifier.includes('leg') ||
+                            fullIdentifier.includes('frame') ||
+                            fullIdentifier.includes('chrome') ||
+                            fullIdentifier.includes('feet') ||
+                            fullIdentifier.includes('base') ||
+                            fullIdentifier.includes('steel') ||
+                            clonedMat.metalness > 0.3;
+
+            if (isMetal) {
+              console.log(`      ↳ CLASSIFIED AS: METAL`);
+              metalMaterialSlots.push(clonedMat);
+            } else {
+              console.log(`      ↳ CLASSIFIED AS: FABRIC`);
+              fabricMaterialSlots.push(clonedMat);
+            }
+          });
         }
       });
+
+      console.log(`Summary: ${fabricMaterialSlots.length} Fabric Slot(s), ${metalMaterialSlots.length} Metal Slot(s) detected.`);
+      console.groupEnd();
 
       const box = new THREE.Box3().setFromObject(loadedModel);
       const size = box.getSize(new THREE.Vector3());
@@ -210,7 +243,6 @@ function initThreeViewer(id, modelPath) {
       controls.target.set(0, modelHeight / 2, 0);
       controls.update();
 
-      // Apply textures to fabric and metal
       applyCustomTextures('/textures/custom');
     },
     undefined,
