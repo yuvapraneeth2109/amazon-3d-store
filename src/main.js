@@ -70,13 +70,13 @@ function initThreeViewer(id, modelPath) {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setSize(width, height);
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = THREE.LinearToneMapping; // Clean, natural color rendering
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // HDRI Environment Lighting
+  // Studio Lighting
   const rgbeLoader = new RGBELoader();
   rgbeLoader.load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
@@ -86,9 +86,8 @@ function initThreeViewer(id, modelPath) {
     }
   );
 
-  // Overhead Light for Direct Ground Shadow
   const shadowLight = new THREE.DirectionalLight(0xffffff, 1.2);
-  shadowLight.position.set(0, 6, 0.3); // Positioned directly overhead
+  shadowLight.position.set(0, 6, 0.3);
   shadowLight.castShadow = true;
   shadowLight.shadow.mapSize.width = 1024;
   shadowLight.shadow.mapSize.height = 1024;
@@ -101,15 +100,15 @@ function initThreeViewer(id, modelPath) {
   shadowLight.shadow.bias = -0.0005;
   scene.add(shadowLight);
 
-  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
   scene.add(ambientLight);
 
-  // Ground Shadow Receiver Floor Plane
+  // Ground Shadow Floor
   const shadowPlaneGeo = new THREE.PlaneGeometry(10, 10);
   const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.35 });
   const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
   shadowPlane.rotation.x = -Math.PI / 2;
-  shadowPlane.position.y = 0; // Fixed at floor level
+  shadowPlane.position.y = 0;
   shadowPlane.receiveShadow = true;
   scene.add(shadowPlane);
 
@@ -117,7 +116,7 @@ function initThreeViewer(id, modelPath) {
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
   controls.minPolarAngle = 0;
-  controls.maxPolarAngle = Math.PI / 2 - 0.01; // Restrict camera below floor
+  controls.maxPolarAngle = Math.PI / 2 - 0.01;
   controls.enablePan = false;
 
   let loadedModel = null;
@@ -132,6 +131,7 @@ function initThreeViewer(id, modelPath) {
     return texture;
   }
 
+  // Load and apply the complete 4-file PBR texture batch together
   async function applyFullPBRBatch(batchPath, prefix) {
     if (!loadedModel) return;
 
@@ -145,23 +145,28 @@ function initThreeViewer(id, modelPath) {
 
       setupPBRTexture(baseColorMap, true);
       setupPBRTexture(metallicMap, false);
-      setupPBRTexture(normalMap, false);
       setupPBRTexture(roughnessMap, false);
+      setupPBRTexture(normalMap, false);
 
       loadedModel.traverse((child) => {
         if (child.isMesh && child.material) {
           const existingRepeat = child.material.map ? child.material.map.repeat : new THREE.Vector2(1, 1);
           
-          [baseColorMap, metallicMap, normalMap, roughnessMap].forEach((t) => {
+          [baseColorMap, metallicMap, roughnessMap, normalMap].forEach((t) => {
             if (t) t.repeat.copy(existingRepeat);
           });
 
+          // Reset material color to white so JPEG colors render 100% true to source
+          child.material.color.setHex(0xffffff);
+
           child.material.map = baseColorMap;
-          child.material.normalMap = normalMap;
-          child.material.roughnessMap = roughnessMap;
           child.material.metalnessMap = metallicMap;
-          child.material.metalness = 0.0;
-          child.material.roughness = 0.85;
+          child.material.roughnessMap = roughnessMap;
+          child.material.normalMap = normalMap;
+
+          // Set scalars to 1.0 so maps fully drive metalness/roughness values
+          child.material.metalness = 1.0;
+          child.material.roughness = 1.0;
           child.material.needsUpdate = true;
         }
       });
@@ -170,7 +175,7 @@ function initThreeViewer(id, modelPath) {
     }
   }
 
-  // Load Model & Align Bottom Exactly to Floor
+  // Load Model
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
@@ -181,30 +186,30 @@ function initThreeViewer(id, modelPath) {
         if (child.isMesh) {
           child.castShadow = true;
           child.receiveShadow = true;
+          
+          // Clear GLB base tint
+          if (child.material) {
+            child.material.color.setHex(0xffffff);
+          }
         }
       });
 
-      // Calculate initial geometry bounds
       const box = new THREE.Box3().setFromObject(loadedModel);
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
 
-      // Scale model
       const scale = 1.8 / maxDim;
       loadedModel.scale.set(scale, scale, scale);
 
-      // Recalculate box after scaling
       const scaledBox = new THREE.Box3().setFromObject(loadedModel);
       const scaledCenter = scaledBox.getCenter(new THREE.Vector3());
 
-      // Center X and Z, set bottom Y exactly to 0 (floor)
       loadedModel.position.x = -scaledCenter.x;
       loadedModel.position.z = -scaledCenter.z;
       loadedModel.position.y = -scaledBox.min.y;
 
       scene.add(loadedModel);
 
-      // Set orbit control target to middle of model height
       const modelHeight = scaledBox.max.y - scaledBox.min.y;
       controls.target.set(0, modelHeight / 2, 0);
       controls.update();
