@@ -12,12 +12,12 @@ const products = [
 ];
 
 const textureBatches = [
-  { id: 'b1', name: 'Batch 1', path: '/textures/batch1' },
-  { id: 'b2', name: 'Batch 2', path: '/textures/batch2' },
-  { id: 'b3', name: 'Batch 3', path: '/textures/batch3' },
-  { id: 'b4', name: 'Batch 4', path: '/textures/batch4' },
-  { id: 'b5', name: 'Batch 5', path: '/textures/batch5' },
-  { id: 'b6', name: 'Batch 6', path: '/textures/batch6' },
+  { id: 'b1', name: 'Batch 1', path: '/textures/batch1', prefix: 'Fabric_Mat_A' },
+  { id: 'b2', name: 'Batch 2', path: '/textures/batch2', prefix: 'Fabric_Mat_B' },
+  { id: 'b3', name: 'Batch 3', path: '/textures/batch3', prefix: 'Fabric_Mat_C' },
+  { id: 'b4', name: 'Batch 4', path: '/textures/batch4', prefix: 'Fabric_Mat_D' },
+  { id: 'b5', name: 'Batch 5', path: '/textures/batch5', prefix: 'Fabric_Mat_E' },
+  { id: 'b6', name: 'Batch 6', path: '/textures/batch6', prefix: 'Fabric_Mat_F' },
 ];
 
 const grid = document.getElementById('product-grid');
@@ -31,8 +31,9 @@ products.forEach((prod) => {
     .map((batch, index) => `
       <button 
         class="swatch ${index === 0 ? 'active' : ''}" 
-        style="background-image: url('${batch.path}/Fabric_Mat_F_BaseColor.jpg')" 
+        style="background-image: url('${batch.path}/${batch.prefix}_BaseColor.jpg')" 
         data-path="${batch.path}"
+        data-prefix="${batch.prefix}"
         title="${batch.name}">
       </button>`)
     .join('');
@@ -71,19 +72,38 @@ function initThreeViewer(id, modelPath) {
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1.0;
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Load Studio Environment
   const rgbeLoader = new RGBELoader();
   rgbeLoader.load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
-    (texture) => {
-      texture.mapping = THREE.EquirectangularReflectionMapping;
-      scene.environment = texture;
+    (hdrTexture) => {
+      hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
+      scene.environment = hdrTexture;
     }
   );
 
-  // Orbit controls with top-view allowed and under-view blocked
+  const shadowLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  shadowLight.position.set(2, 4, 2);
+  shadowLight.castShadow = true;
+  shadowLight.shadow.mapSize.width = 1024;
+  shadowLight.shadow.mapSize.height = 1024;
+  shadowLight.shadow.bias = -0.0001;
+  scene.add(shadowLight);
+
+  const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+  scene.add(ambientLight);
+
+  const shadowPlaneGeo = new THREE.PlaneGeometry(10, 10);
+  const shadowPlaneMat = new THREE.ShadowMaterial({ opacity: 0.25 });
+  const shadowPlane = new THREE.Mesh(shadowPlaneGeo, shadowPlaneMat);
+  shadowPlane.rotation.x = -Math.PI / 2;
+  shadowPlane.position.y = -0.01;
+  shadowPlane.receiveShadow = true;
+  scene.add(shadowPlane);
+
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.05;
@@ -93,41 +113,67 @@ function initThreeViewer(id, modelPath) {
 
   let loadedModel = null;
 
-  function applyTextureBatch(batchPath) {
+  function configureTexture(tex) {
+    if (!tex) return;
+    tex.flipY = false;
+    tex.wrapS = THREE.RepeatWrapping;
+    tex.wrapT = THREE.RepeatWrapping;
+    tex.needsUpdate = true;
+  }
+
+  function applyTextureBatch(batchPath, prefix) {
     if (!loadedModel) return;
 
-    textureLoader.load(`${batchPath}/Fabric_Mat_F_BaseColor.jpg`, (baseColorMap) => {
+    const baseColorPath = `${batchPath}/${prefix}_BaseColor.jpg`;
+    const metallicPath = `${batchPath}/${prefix}_Metallic.jpg`;
+    const normalPath = `${batchPath}/${prefix}_Normal.jpg`;
+    const roughnessPath = `${batchPath}/${prefix}_Roughness.jpg`;
+
+    textureLoader.load(baseColorPath, (baseColorMap) => {
       baseColorMap.colorSpace = THREE.SRGBColorSpace;
-      baseColorMap.flipY = false;
+      configureTexture(baseColorMap);
 
-      const metallicMap = textureLoader.load(`${batchPath}/Fabric_Mat_F_Metallic.jpg`);
-      const normalMap = textureLoader.load(`${batchPath}/Fabric_Mat_F_Normal.jpg`);
-      const roughnessMap = textureLoader.load(`${batchPath}/Fabric_Mat_F_Roughness.jpg`);
-
-      [metallicMap, normalMap, roughnessMap].forEach(t => { t.flipY = false; });
+      const metallicMap = textureLoader.load(metallicPath, (t) => configureTexture(t));
+      const normalMap = textureLoader.load(normalPath, (t) => configureTexture(t));
+      const roughnessMap = textureLoader.load(roughnessPath, (t) => configureTexture(t));
 
       loadedModel.traverse((child) => {
         if (child.isMesh) {
-          child.material.map = baseColorMap;
-          child.material.normalMap = normalMap;
-          child.material.roughnessMap = roughnessMap;
-          child.material.metalnessMap = metallicMap;
-          
-          // Fabric material properties
-          child.material.metalness = 0.0;
-          child.material.roughness = 0.85;
-          child.material.needsUpdate = true;
+          if (child.material) {
+            child.material.map = baseColorMap;
+            child.material.normalMap = normalMap;
+            child.material.roughnessMap = roughnessMap;
+            child.material.metalnessMap = metallicMap;
+            child.material.metalness = 0.0;
+            child.material.roughness = 0.85;
+            child.material.needsUpdate = true;
+          } else {
+            child.material = new THREE.MeshStandardMaterial({
+              map: baseColorMap,
+              normalMap: normalMap,
+              roughnessMap: roughnessMap,
+              metalnessMap: metallicMap,
+              metalness: 0.0,
+              roughness: 0.85,
+            });
+          }
         }
       });
     });
   }
 
-  // Load GLB
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
     (gltf) => {
       loadedModel = gltf.scene;
+
+      loadedModel.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
 
       const wrapper = new THREE.Group();
       wrapper.add(loadedModel);
@@ -144,23 +190,26 @@ function initThreeViewer(id, modelPath) {
         wrapper.scale.set(scale, scale, scale);
       }
 
+      const updatedBox = new THREE.Box3().setFromObject(wrapper);
+      wrapper.position.y = -updatedBox.min.y;
+
       scene.add(wrapper);
     },
     undefined,
-    (err) => console.error(`Error loading model ${modelPath}:`, err)
+    (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
-  // Swatch click logic
   const swatchContainer = document.getElementById(`swatches-${id}`);
   swatchContainer.addEventListener('click', (e) => {
     const target = e.target.closest('.swatch');
     if (!target) return;
 
     const batchPath = target.getAttribute('data-path');
-    if (batchPath) {
-      swatchContainer.querySelectorAll('.swatch').forEach(btn => btn.classList.remove('active'));
+    const prefix = target.getAttribute('data-prefix');
+    if (batchPath && prefix) {
+      swatchContainer.querySelectorAll('.swatch').forEach((btn) => btn.classList.remove('active'));
       target.classList.add('active');
-      applyTextureBatch(batchPath);
+      applyTextureBatch(batchPath, prefix);
     }
   });
 
