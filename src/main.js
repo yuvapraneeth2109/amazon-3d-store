@@ -11,15 +11,15 @@ const products = [
   { id: 'p5', name: 'Product 5', price: '$199.99', file: '/models/model5.glb' },
 ];
 
-// 7 Fabric Material Types (Different surface textures/sheen, same color)
-const fabricOptions = [
-  { id: 'fab1', name: 'Standard Smooth Leather', roughness: 0.55, normalScale: 1.0, clearcoat: 0.1 },
-  { id: 'fab2', name: 'Heavy Woven Tweed / Cloth', roughness: 0.95, normalScale: 2.8, clearcoat: 0.0 },
-  { id: 'fab3', name: 'Soft Matte Velvet', roughness: 0.98, normalScale: 0.3, clearcoat: 0.0 },
-  { id: 'fab4', name: 'Fine Woven Linen', roughness: 0.88, normalScale: 1.6, clearcoat: 0.0 },
-  { id: 'fab5', name: 'Microfiber Suede', roughness: 0.99, normalScale: 0.2, clearcoat: 0.0 },
-  { id: 'fab6', name: 'Coarse Canvas Fabric', roughness: 0.90, normalScale: 2.2, clearcoat: 0.0 },
-  { id: 'fab7', name: 'Pebbled Heavy Grain Leather', roughness: 0.40, normalScale: 2.0, clearcoat: 0.3 },
+// Color Swatch Palette
+const colorOptions = [
+  { id: 'original', name: 'Original Maroon', hex: '#ffffff' }, // #ffffff keeps exact texture file color
+  { id: 'espresso', name: 'Espresso Brown', hex: '#3E2723' },
+  { id: 'navy', name: 'Midnight Navy', hex: '#1A237E' },
+  { id: 'charcoal', name: 'Charcoal Grey', hex: '#212121' },
+  { id: 'olive', name: 'Olive Green', hex: '#33691E' },
+  { id: 'cognac', name: 'Cognac Tan', hex: '#8D6E63' },
+  { id: 'cream', name: 'Warm Cream', hex: '#E0D7C6' },
 ];
 
 const grid = document.getElementById('product-grid');
@@ -29,12 +29,12 @@ products.forEach((prod) => {
   const card = document.createElement('div');
   card.className = 'card';
 
-  const swatchesHTML = fabricOptions
+  const swatchesHTML = colorOptions
     .map((opt, index) => `
       <button 
         class="swatch ${index === 0 ? 'active' : ''}" 
-        style="background-image: url('/textures/fabric1/Fabric_Mat_A_BaseColor.jpg'); background-size: cover;" 
-        data-id="${opt.id}"
+        style="background-color: ${opt.hex === '#ffffff' ? '#802B2B' : opt.hex}" 
+        data-hex="${opt.hex}"
         title="${opt.name}">
       </button>`)
     .join('');
@@ -45,7 +45,7 @@ products.forEach((prod) => {
       <div class="title">${prod.name}</div>
       <div class="price">${prod.price}</div>
       <div class="color-section">
-        <span>Fabric Material Options</span>
+        <span>Select Color</span>
         <div class="swatches" id="swatches-${prod.id}">${swatchesHTML}</div>
       </div>
     </div>
@@ -77,7 +77,7 @@ function initThreeViewer(id, modelPath) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Studio HDRI Lighting
+  // Studio Lighting
   const rgbeLoader = new RGBELoader();
   rgbeLoader.load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
@@ -127,6 +127,7 @@ function initThreeViewer(id, modelPath) {
 
   async function loadSlotTexture(material, slotName) {
     try {
+      // Looks directly in public/textures/ or public/textures/fabric1/
       const basePath = `/textures/fabric1/${slotName}`;
       const [baseColorMap, normalMap, roughnessMap, metallicMap] = await Promise.all([
         textureLoader.loadAsync(`${basePath}_BaseColor.jpg`),
@@ -140,13 +141,12 @@ function initThreeViewer(id, modelPath) {
       prepTexture(roughnessMap, false);
       prepTexture(metallicMap, false);
 
-      // Preserve original base color map and color tint
       material.color.setHex(0xffffff);
       material.map = baseColorMap;
       material.normalMap = normalMap;
       material.roughnessMap = roughnessMap;
 
-      // Slot G is metallic handle/frame; slots A-F are fabric body
+      // Slot G is metallic frame/handle; slots A through F are fabric
       if (slotName === 'Fabric_Mat_G') {
         material.metalnessMap = metallicMap;
         material.metalness = 1.0;
@@ -154,7 +154,7 @@ function initThreeViewer(id, modelPath) {
       } else {
         material.metalnessMap = null;
         material.metalness = 0.0;
-        material.roughness = 0.55;
+        material.roughness = 0.75;
         fabricMaterials.push(material);
       }
 
@@ -219,7 +219,7 @@ function initThreeViewer(id, modelPath) {
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
-  // Swatch Click: Change Fabric Material Structure (Same Color)
+  // Swatch Click: Tint Color Only
   const swatchContainer = document.getElementById(`swatches-${id}`);
   swatchContainer.addEventListener('click', (e) => {
     const target = e.target.closest('.swatch');
@@ -228,23 +228,10 @@ function initThreeViewer(id, modelPath) {
     swatchContainer.querySelectorAll('.swatch').forEach((btn) => btn.classList.remove('active'));
     target.classList.add('active');
 
-    const fabId = target.getAttribute('data-id');
-    const preset = fabricOptions.find((opt) => opt.id === fabId);
-
-    if (preset) {
+    const hexColor = target.getAttribute('data-hex');
+    if (hexColor) {
       fabricMaterials.forEach((mat) => {
-        // Keep color untouched (#ffffff over base color texture)
-        mat.color.setHex(0xffffff);
-        mat.roughness = preset.roughness;
-
-        if (mat.normalMap) {
-          mat.normalScale.set(preset.normalScale, preset.normalScale);
-        }
-
-        if ('clearcoat' in mat) {
-          mat.clearcoat = preset.clearcoat;
-        }
-
+        mat.color.set(hexColor);
         mat.needsUpdate = true;
       });
     }
