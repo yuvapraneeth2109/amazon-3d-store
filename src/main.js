@@ -11,15 +11,15 @@ const products = [
   { id: 'p5', name: 'Product 5', price: '$199.99', file: '/models/model5.glb' },
 ];
 
-// 7 Distinct Fabric Presets (Color, Matte/Shine, and Surface Grain Depth)
+// 7 Fabric Material Types (Different surface textures/sheen, same color)
 const fabricOptions = [
-  { id: 'fab1', name: 'Vintage Cognac Leather', color: '#ffffff', roughness: 0.65, normalScale: 1.0 },
-  { id: 'fab2', name: 'Midnight Navy Velvet', color: '#1B263B', roughness: 0.95, normalScale: 0.5 },
-  { id: 'fab3', name: 'Charcoal Tweed', color: '#2B2D42', roughness: 0.90, normalScale: 1.4 },
-  { id: 'fab4', name: 'Warm Cream Linen', color: '#E3D5CA', roughness: 0.88, normalScale: 0.7 },
-  { id: 'fab5', name: 'Forest Green Suede', color: '#2D3A27', roughness: 0.98, normalScale: 0.4 },
-  { id: 'fab6', name: 'Espresso Dark Sheen', color: '#2B1E1A', roughness: 0.35, normalScale: 1.2 },
-  { id: 'fab7', name: 'Deep Wine Burgundy', color: '#581820', roughness: 0.75, normalScale: 1.0 },
+  { id: 'fab1', name: 'Standard Smooth Leather', roughness: 0.55, normalScale: 1.0, clearcoat: 0.1 },
+  { id: 'fab2', name: 'Heavy Woven Tweed / Cloth', roughness: 0.95, normalScale: 2.8, clearcoat: 0.0 },
+  { id: 'fab3', name: 'Soft Matte Velvet', roughness: 0.98, normalScale: 0.3, clearcoat: 0.0 },
+  { id: 'fab4', name: 'Fine Woven Linen', roughness: 0.88, normalScale: 1.6, clearcoat: 0.0 },
+  { id: 'fab5', name: 'Microfiber Suede', roughness: 0.99, normalScale: 0.2, clearcoat: 0.0 },
+  { id: 'fab6', name: 'Coarse Canvas Fabric', roughness: 0.90, normalScale: 2.2, clearcoat: 0.0 },
+  { id: 'fab7', name: 'Pebbled Heavy Grain Leather', roughness: 0.40, normalScale: 2.0, clearcoat: 0.3 },
 ];
 
 const grid = document.getElementById('product-grid');
@@ -33,7 +33,7 @@ products.forEach((prod) => {
     .map((opt, index) => `
       <button 
         class="swatch ${index === 0 ? 'active' : ''}" 
-        style="background-color: ${opt.color === '#ffffff' ? '#802B2B' : opt.color}" 
+        style="background-image: url('/textures/fabric1/Fabric_Mat_A_BaseColor.jpg'); background-size: cover;" 
         data-id="${opt.id}"
         title="${opt.name}">
       </button>`)
@@ -45,7 +45,7 @@ products.forEach((prod) => {
       <div class="title">${prod.name}</div>
       <div class="price">${prod.price}</div>
       <div class="color-section">
-        <span>Fabric Options</span>
+        <span>Fabric Material Options</span>
         <div class="swatches" id="swatches-${prod.id}">${swatchesHTML}</div>
       </div>
     </div>
@@ -77,7 +77,7 @@ function initThreeViewer(id, modelPath) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Studio Lighting
+  // Studio HDRI Lighting
   const rgbeLoader = new RGBELoader();
   rgbeLoader.load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
@@ -140,11 +140,13 @@ function initThreeViewer(id, modelPath) {
       prepTexture(roughnessMap, false);
       prepTexture(metallicMap, false);
 
+      // Preserve original base color map and color tint
+      material.color.setHex(0xffffff);
       material.map = baseColorMap;
       material.normalMap = normalMap;
       material.roughnessMap = roughnessMap;
 
-      // Slot G is metallic frame/handle; slots A through F are fabric
+      // Slot G is metallic handle/frame; slots A-F are fabric body
       if (slotName === 'Fabric_Mat_G') {
         material.metalnessMap = metallicMap;
         material.metalness = 1.0;
@@ -152,7 +154,7 @@ function initThreeViewer(id, modelPath) {
       } else {
         material.metalnessMap = null;
         material.metalness = 0.0;
-        material.roughness = 0.65;
+        material.roughness = 0.55;
         fabricMaterials.push(material);
       }
 
@@ -162,7 +164,7 @@ function initThreeViewer(id, modelPath) {
     }
   }
 
-  // Load Model
+  // Load GLB Model
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
@@ -217,7 +219,7 @@ function initThreeViewer(id, modelPath) {
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
-  // Apply Fabric Preset Changes on Swatch Click
+  // Swatch Click: Change Fabric Material Structure (Same Color)
   const swatchContainer = document.getElementById(`swatches-${id}`);
   swatchContainer.addEventListener('click', (e) => {
     const target = e.target.closest('.swatch');
@@ -231,11 +233,18 @@ function initThreeViewer(id, modelPath) {
 
     if (preset) {
       fabricMaterials.forEach((mat) => {
-        mat.color.set(preset.color);
+        // Keep color untouched (#ffffff over base color texture)
+        mat.color.setHex(0xffffff);
         mat.roughness = preset.roughness;
+
         if (mat.normalMap) {
           mat.normalScale.set(preset.normalScale, preset.normalScale);
         }
+
+        if ('clearcoat' in mat) {
+          mat.clearcoat = preset.clearcoat;
+        }
+
         mat.needsUpdate = true;
       });
     }
