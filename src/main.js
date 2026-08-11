@@ -11,6 +11,17 @@ const products = [
   { id: 'p5', name: 'Product 5', price: '$199.99', file: '/models/model5.glb' },
 ];
 
+// Color/Fabric options preserving slot UV alignment
+const colorOptions = [
+  { id: 'original', name: 'Original Red', hex: '#ffffff' },
+  { id: 'espresso', name: 'Espresso Brown', hex: '#3E2723' },
+  { id: 'navy', name: 'Midnight Navy', hex: '#1A237E' },
+  { id: 'charcoal', name: 'Charcoal Grey', hex: '#212121' },
+  { id: 'olive', name: 'Olive Green', hex: '#33691E' },
+  { id: 'cognac', name: 'Cognac Tan', hex: '#8D6E63' },
+  { id: 'cream', name: 'Warm Cream', hex: '#E0D7C6' },
+];
+
 const grid = document.getElementById('product-grid');
 const textureLoader = new THREE.TextureLoader();
 
@@ -18,11 +29,25 @@ products.forEach((prod) => {
   const card = document.createElement('div');
   card.className = 'card';
 
+  const swatchesHTML = colorOptions
+    .map((opt, index) => `
+      <button 
+        class="swatch ${index === 0 ? 'active' : ''}" 
+        style="background-color: ${opt.hex === '#ffffff' ? '#802B2B' : opt.hex}" 
+        data-hex="${opt.hex}"
+        title="${opt.name}">
+      </button>`)
+    .join('');
+
   card.innerHTML = `
     <div class="canvas-box" id="canvas-${prod.id}"></div>
     <div class="details">
       <div class="title">${prod.name}</div>
       <div class="price">${prod.price}</div>
+      <div class="color-section">
+        <span>Fabric Color Options</span>
+        <div class="swatches" id="swatches-${prod.id}">${swatchesHTML}</div>
+      </div>
     </div>
   `;
   grid.appendChild(card);
@@ -88,6 +113,8 @@ function initThreeViewer(id, modelPath) {
   controls.maxPolarAngle = Math.PI / 2 - 0.01;
   controls.enablePan = false;
 
+  const fabricMaterialSlots = [];
+
   function prepTexture(tex, isColor = false) {
     tex.flipY = false;
     tex.wrapS = THREE.RepeatWrapping;
@@ -118,7 +145,7 @@ function initThreeViewer(id, modelPath) {
       material.normalMap = normalMap;
       material.roughnessMap = roughnessMap;
 
-      // Slot G is metallic frame/mechanism; A through F are non-metallic fabrics
+      // Slot G is metallic handle/logo/mechanism; slots A-F are fabric body
       if (slotName === 'Fabric_Mat_G') {
         material.metalnessMap = metallicMap;
         material.metalness = 1.0;
@@ -127,6 +154,7 @@ function initThreeViewer(id, modelPath) {
         material.metalnessMap = null;
         material.metalness = 0.0;
         material.roughness = 0.85;
+        fabricMaterialSlots.push(material);
       }
 
       material.needsUpdate = true;
@@ -135,7 +163,7 @@ function initThreeViewer(id, modelPath) {
     }
   }
 
-  // Load Model and map each slot to its respective UV texture set
+  // Load Model
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
@@ -158,8 +186,6 @@ function initThreeViewer(id, modelPath) {
             }
 
             const rawMatName = clonedMat.name || '';
-            
-            // Map each material slot name directly to its matching texture set (Fabric_Mat_A .. G)
             if (rawMatName.startsWith('Fabric_Mat_')) {
               loadSlotTexture(clonedMat, rawMatName);
             }
@@ -191,6 +217,24 @@ function initThreeViewer(id, modelPath) {
     undefined,
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
+
+  // Swatch Click Listener
+  const swatchContainer = document.getElementById(`swatches-${id}`);
+  swatchContainer.addEventListener('click', (e) => {
+    const target = e.target.closest('.swatch');
+    if (!target) return;
+
+    swatchContainer.querySelectorAll('.swatch').forEach((btn) => btn.classList.remove('active'));
+    target.classList.add('active');
+
+    const hexColor = target.getAttribute('data-hex');
+    if (hexColor) {
+      fabricMaterialSlots.forEach((mat) => {
+        mat.color.set(hexColor);
+        mat.needsUpdate = true;
+      });
+    }
+  });
 
   window.addEventListener('resize', () => {
     const w = container.clientWidth;
