@@ -11,15 +11,15 @@ const products = [
   { id: 'p5', name: 'Product 5', price: '$199.99', file: '/models/model5.glb' },
 ];
 
-// Define 7 distinct fabric choices (each with its folder path)
+// 7 Distinct Fabric Presets (Color, Matte/Shine, and Surface Grain Depth)
 const fabricOptions = [
-  { id: 'fab1', name: 'Fabric Option 1', folder: '/textures/fabric1' },
-  { id: 'fab2', name: 'Fabric Option 2', folder: '/textures/fabric2' },
-  { id: 'fab3', name: 'Fabric Option 3', folder: '/textures/fabric3' },
-  { id: 'fab4', name: 'Fabric Option 4', folder: '/textures/fabric4' },
-  { id: 'fab5', name: 'Fabric Option 5', folder: '/textures/fabric5' },
-  { id: 'fab6', name: 'Fabric Option 6', folder: '/textures/fabric6' },
-  { id: 'fab7', name: 'Fabric Option 7', folder: '/textures/fabric7' },
+  { id: 'fab1', name: 'Vintage Cognac Leather', color: '#ffffff', roughness: 0.65, normalScale: 1.0 },
+  { id: 'fab2', name: 'Midnight Navy Velvet', color: '#1B263B', roughness: 0.95, normalScale: 0.5 },
+  { id: 'fab3', name: 'Charcoal Tweed', color: '#2B2D42', roughness: 0.90, normalScale: 1.4 },
+  { id: 'fab4', name: 'Warm Cream Linen', color: '#E3D5CA', roughness: 0.88, normalScale: 0.7 },
+  { id: 'fab5', name: 'Forest Green Suede', color: '#2D3A27', roughness: 0.98, normalScale: 0.4 },
+  { id: 'fab6', name: 'Espresso Dark Sheen', color: '#2B1E1A', roughness: 0.35, normalScale: 1.2 },
+  { id: 'fab7', name: 'Deep Wine Burgundy', color: '#581820', roughness: 0.75, normalScale: 1.0 },
 ];
 
 const grid = document.getElementById('product-grid');
@@ -33,8 +33,8 @@ products.forEach((prod) => {
     .map((opt, index) => `
       <button 
         class="swatch ${index === 0 ? 'active' : ''}" 
-        style="background-image: url('${opt.folder}/Fabric_Mat_A_BaseColor.jpg')" 
-        data-folder="${opt.folder}"
+        style="background-color: ${opt.color === '#ffffff' ? '#802B2B' : opt.color}" 
+        data-id="${opt.id}"
         title="${opt.name}">
       </button>`)
     .join('');
@@ -77,7 +77,7 @@ function initThreeViewer(id, modelPath) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Studio HDRI Lighting
+  // Studio Lighting
   const rgbeLoader = new RGBELoader();
   rgbeLoader.load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
@@ -113,7 +113,7 @@ function initThreeViewer(id, modelPath) {
   controls.maxPolarAngle = Math.PI / 2 - 0.01;
   controls.enablePan = false;
 
-  const slotMaterialMap = new Map();
+  const fabricMaterials = [];
 
   function prepTexture(tex, isColor = false) {
     tex.flipY = false;
@@ -125,50 +125,41 @@ function initThreeViewer(id, modelPath) {
     return tex;
   }
 
-  async function loadFabricFolder(folderPath) {
-    const promises = [];
+  async function loadSlotTexture(material, slotName) {
+    try {
+      const basePath = `/textures/fabric1/${slotName}`;
+      const [baseColorMap, normalMap, roughnessMap, metallicMap] = await Promise.all([
+        textureLoader.loadAsync(`${basePath}_BaseColor.jpg`),
+        textureLoader.loadAsync(`${basePath}_Normal.jpg`),
+        textureLoader.loadAsync(`${basePath}_Roughness.jpg`),
+        textureLoader.loadAsync(`${basePath}_Metallic.jpg`),
+      ]);
 
-    slotMaterialMap.forEach((material, slotName) => {
-      const p = (async () => {
-        try {
-          const basePath = `${folderPath}/${slotName}`;
-          const [baseColorMap, normalMap, roughnessMap, metallicMap] = await Promise.all([
-            textureLoader.loadAsync(`${basePath}_BaseColor.jpg`),
-            textureLoader.loadAsync(`${basePath}_Normal.jpg`),
-            textureLoader.loadAsync(`${basePath}_Roughness.jpg`),
-            textureLoader.loadAsync(`${basePath}_Metallic.jpg`),
-          ]);
+      prepTexture(baseColorMap, true);
+      prepTexture(normalMap, false);
+      prepTexture(roughnessMap, false);
+      prepTexture(metallicMap, false);
 
-          prepTexture(baseColorMap, true);
-          prepTexture(normalMap, false);
-          prepTexture(roughnessMap, false);
-          prepTexture(metallicMap, false);
+      material.map = baseColorMap;
+      material.normalMap = normalMap;
+      material.roughnessMap = roughnessMap;
 
-          material.color.setHex(0xffffff);
-          material.map = baseColorMap;
-          material.normalMap = normalMap;
-          material.roughnessMap = roughnessMap;
+      // Slot G is metallic frame/handle; slots A through F are fabric
+      if (slotName === 'Fabric_Mat_G') {
+        material.metalnessMap = metallicMap;
+        material.metalness = 1.0;
+        material.roughness = 0.25;
+      } else {
+        material.metalnessMap = null;
+        material.metalness = 0.0;
+        material.roughness = 0.65;
+        fabricMaterials.push(material);
+      }
 
-          // Slot G remains metallic frame/mechanism; A through F are non-metallic fabric body
-          if (slotName === 'Fabric_Mat_G') {
-            material.metalnessMap = metallicMap;
-            material.metalness = 1.0;
-            material.roughness = 0.25;
-          } else {
-            material.metalnessMap = null;
-            material.metalness = 0.0;
-            material.roughness = 0.85;
-          }
-
-          material.needsUpdate = true;
-        } catch (err) {
-          console.error(`Failed loading ${slotName} from ${folderPath}:`, err);
-        }
-      })();
-      promises.push(p);
-    });
-
-    await Promise.all(promises);
+      material.needsUpdate = true;
+    } catch (err) {
+      console.error(`Failed loading slot ${slotName}:`, err);
+    }
   }
 
   // Load Model
@@ -195,13 +186,13 @@ function initThreeViewer(id, modelPath) {
 
             const rawMatName = clonedMat.name || '';
             if (rawMatName.startsWith('Fabric_Mat_')) {
-              slotMaterialMap.set(rawMatName, clonedMat);
+              loadSlotTexture(clonedMat, rawMatName);
             }
           });
         }
       });
 
-      // Auto-center and scale
+      // Auto-center and fit model
       const box = new THREE.Box3().setFromObject(loadedModel);
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
@@ -221,15 +212,12 @@ function initThreeViewer(id, modelPath) {
       const modelHeight = scaledBox.max.y - scaledBox.min.y;
       controls.target.set(0, modelHeight / 2, 0);
       controls.update();
-
-      // Load initial fabric option (fabric1)
-      loadFabricFolder('/textures/fabric1');
     },
     undefined,
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
-  // Swatch Listener
+  // Apply Fabric Preset Changes on Swatch Click
   const swatchContainer = document.getElementById(`swatches-${id}`);
   swatchContainer.addEventListener('click', (e) => {
     const target = e.target.closest('.swatch');
@@ -238,9 +226,18 @@ function initThreeViewer(id, modelPath) {
     swatchContainer.querySelectorAll('.swatch').forEach((btn) => btn.classList.remove('active'));
     target.classList.add('active');
 
-    const folder = target.getAttribute('data-folder');
-    if (folder) {
-      loadFabricFolder(folder);
+    const fabId = target.getAttribute('data-id');
+    const preset = fabricOptions.find((opt) => opt.id === fabId);
+
+    if (preset) {
+      fabricMaterials.forEach((mat) => {
+        mat.color.set(preset.color);
+        mat.roughness = preset.roughness;
+        if (mat.normalMap) {
+          mat.normalScale.set(preset.normalScale, preset.normalScale);
+        }
+        mat.needsUpdate = true;
+      });
     }
   });
 
