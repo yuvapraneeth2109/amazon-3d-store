@@ -105,18 +105,25 @@ async function applyColorToMaterial(material, slotName, folderPath) {
 
   material.color.setHex(0xffffff);
   material.map = maps.baseColorMap;
-  material.normalMap = maps.normalMap;
-  material.roughnessMap = maps.roughnessMap;
 
-  // Slot G is metallic handle/legs; slots A through F are fabric
+  // Soften normal map bump intensity to eliminate harsh glare
+  material.normalMap = maps.normalMap;
+  if (material.normalScale) {
+    material.normalScale.set(0.2, 0.2);
+  }
+
+  // Slot G is metallic legs/frame; slots A through F are fabric
   if (slotName === 'Fabric_Mat_G') {
+    material.roughnessMap = maps.roughnessMap;
     material.metalnessMap = maps.metallicMap;
     material.metalness = 1.0;
     material.roughness = 0.25;
   } else {
     material.metalnessMap = null;
     material.metalness = 0.0;
-    material.roughness = 0.75;
+    // Set high roughness (1.0) so red matches the matte finish of the blue sofa
+    material.roughnessMap = maps.roughnessMap;
+    material.roughness = 1.0;
   }
 
   material.needsUpdate = true;
@@ -156,7 +163,7 @@ function initThreeViewer(id, modelPath) {
     (err) => console.warn('HDR environment load warning:', err)
   );
 
-  const shadowLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  const shadowLight = new THREE.DirectionalLight(0xffffff, 1.0);
   shadowLight.position.set(0, 6, 0.3);
   shadowLight.castShadow = true;
   shadowLight.shadow.mapSize.width = 1024;
@@ -209,7 +216,7 @@ function initThreeViewer(id, modelPath) {
             const rawMatName = clonedMat.name || '';
             if (rawMatName.startsWith('Fabric_Mat_')) {
               trackedMaterials.push({ material: clonedMat, slotName: rawMatName });
-              // Load default Red color set
+              // Default load Red color
               applyColorToMaterial(clonedMat, rawMatName, '/textures/red');
             }
           });
@@ -241,7 +248,7 @@ function initThreeViewer(id, modelPath) {
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
-  // Swatch Click: Swap all 28 maps to target color set
+  // Swatch Click: Swap texture set
   const swatchContainer = document.getElementById(`swatches-${id}`);
   if (swatchContainer) {
     swatchContainer.addEventListener('click', (e) => {
