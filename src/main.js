@@ -11,19 +11,15 @@ const products = [
   { id: 'p5', name: 'Product 5', price: '$199.99', file: '/models/model5.glb' },
 ];
 
-// Color Swatch Palette
+// Only 2 Color Options: Red and Blue
 const colorOptions = [
-  { id: 'original', name: 'Original Maroon', hex: '#ffffff' }, // #ffffff preserves base texture color
-  { id: 'espresso', name: 'Espresso Brown', hex: '#3E2723' },
-  { id: 'navy', name: 'Midnight Navy', hex: '#1A237E' },
-  { id: 'charcoal', name: 'Charcoal Grey', hex: '#212121' },
-  { id: 'olive', name: 'Olive Green', hex: '#33691E' },
-  { id: 'cognac', name: 'Cognac Tan', hex: '#8D6E63' },
-  { id: 'cream', name: 'Warm Cream', hex: '#E0D7C6' },
+  { id: 'red', name: 'Red Fabric', folder: '/textures/red', swatchColor: '#802B2B' },
+  { id: 'blue', name: 'Blue Fabric', folder: '/textures/blue', swatchColor: '#2A4B7C' },
 ];
 
 const grid = document.getElementById('product-grid');
 const textureLoader = new THREE.TextureLoader();
+const textureCache = {};
 
 products.forEach((prod) => {
   const card = document.createElement('div');
@@ -31,29 +27,90 @@ products.forEach((prod) => {
 
   const swatchesHTML = colorOptions
     .map((opt, index) => `
-      <button 
-        class="swatch ${index === 0 ? 'active' : ''}" 
-        style="background-color: ${opt.hex === '#ffffff' ? '#802B2B' : opt.hex}" 
-        data-hex="${opt.hex}"
-        title="${opt.name}">
-      </button>`)
+      
+      `)
     .join('');
 
   card.innerHTML = `
-    <div class="canvas-box" id="canvas-${prod.id}"></div>
-    <div class="details">
-      <div class="title">${prod.name}</div>
-      <div class="price">${prod.price}</div>
-      <div class="color-section">
-        <span>Select Color</span>
-        <div class="swatches" id="swatches-${prod.id}">${swatchesHTML}</div>
-      </div>
-    </div>
+    
+    
+      ${prod.name}
+      ${prod.price}
+      
+        Select Color
+        ${swatchesHTML}
+      
+    
   `;
   grid.appendChild(card);
 
   initThreeViewer(prod.id, prod.file);
 });
+
+function prepTexture(tex, isColor = false) {
+  tex.flipY = false;
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.RepeatWrapping;
+  if (isColor) {
+    tex.colorSpace = THREE.SRGBColorSpace;
+  }
+  return tex;
+}
+
+// Load and cache all 4 texture maps for a given material slot and color folder
+async function getSlotTextures(folderPath, slotName) {
+  if (!textureCache[folderPath]) {
+    textureCache[folderPath] = {};
+  }
+  if (textureCache[folderPath][slotName]) {
+    return textureCache[folderPath][slotName];
+  }
+
+  const basePath = `${folderPath}/${slotName}`;
+  try {
+    const [baseColorMap, normalMap, roughnessMap, metallicMap] = await Promise.all([
+      textureLoader.loadAsync(`${basePath}_BaseColor.jpg`),
+      textureLoader.loadAsync(`${basePath}_Normal.jpg`),
+      textureLoader.loadAsync(`${basePath}_Roughness.jpg`),
+      textureLoader.loadAsync(`${basePath}_Metallic.jpg`),
+    ]);
+
+    prepTexture(baseColorMap, true);
+    prepTexture(normalMap, false);
+    prepTexture(roughnessMap, false);
+    prepTexture(metallicMap, false);
+
+    const maps = { baseColorMap, normalMap, roughnessMap, metallicMap };
+    textureCache[folderPath][slotName] = maps;
+    return maps;
+  } catch (err) {
+    console.error(`Failed to load texture maps for ${basePath}:`, err);
+    return null;
+  }
+}
+
+async function applyColorToMaterial(material, slotName, folderPath) {
+  const maps = await getSlotTextures(folderPath, slotName);
+  if (!maps) return;
+
+  material.color.setHex(0xffffff);
+  material.map = maps.baseColorMap;
+  material.normalMap = maps.normalMap;
+  material.roughnessMap = maps.roughnessMap;
+
+  // Slot G is metallic frame/handle; slots A through F are fabric
+  if (slotName === 'Fabric_Mat_G') {
+    material.metalnessMap = maps.metallicMap;
+    material.metalness = 1.0;
+    material.roughness = 0.25;
+  } else {
+    material.metalnessMap = null;
+    material.metalness = 0.0;
+    material.roughness = 0.75;
+  }
+
+  material.needsUpdate = true;
+}
 
 function initThreeViewer(id, modelPath) {
   const container = document.getElementById(`canvas-${id}`);
@@ -113,56 +170,7 @@ function initThreeViewer(id, modelPath) {
   controls.maxPolarAngle = Math.PI / 2 - 0.01;
   controls.enablePan = false;
 
-  const fabricMaterials = [];
-
-  function prepTexture(tex, isColor = false) {
-    tex.flipY = false;
-    tex.wrapS = THREE.RepeatWrapping;
-    tex.wrapT = THREE.RepeatWrapping;
-    if (isColor) {
-      tex.colorSpace = THREE.SRGBColorSpace;
-    }
-    return tex;
-  }
-
-  async function loadSlotTexture(material, slotName) {
-    try {
-      // Direct path to public/textures/
-      const basePath = `/textures/${slotName}`;
-      const [baseColorMap, normalMap, roughnessMap, metallicMap] = await Promise.all([
-        textureLoader.loadAsync(`${basePath}_BaseColor.jpg`),
-        textureLoader.loadAsync(`${basePath}_Normal.jpg`),
-        textureLoader.loadAsync(`${basePath}_Roughness.jpg`),
-        textureLoader.loadAsync(`${basePath}_Metallic.jpg`),
-      ]);
-
-      prepTexture(baseColorMap, true);
-      prepTexture(normalMap, false);
-      prepTexture(roughnessMap, false);
-      prepTexture(metallicMap, false);
-
-      material.color.setHex(0xffffff);
-      material.map = baseColorMap;
-      material.normalMap = normalMap;
-      material.roughnessMap = roughnessMap;
-
-      // Slot G is metallic frame/handle; slots A through F are fabric
-      if (slotName === 'Fabric_Mat_G') {
-        material.metalnessMap = metallicMap;
-        material.metalness = 1.0;
-        material.roughness = 0.25;
-      } else {
-        material.metalnessMap = null;
-        material.metalness = 0.0;
-        material.roughness = 0.75;
-        fabricMaterials.push(material);
-      }
-
-      material.needsUpdate = true;
-    } catch (err) {
-      console.error(`Failed loading slot ${slotName}:`, err);
-    }
-  }
+  const trackedMaterials = [];
 
   // Load GLB Model
   const loader = new GLTFLoader();
@@ -188,7 +196,9 @@ function initThreeViewer(id, modelPath) {
 
             const rawMatName = clonedMat.name || '';
             if (rawMatName.startsWith('Fabric_Mat_')) {
-              loadSlotTexture(clonedMat, rawMatName);
+              trackedMaterials.push({ material: clonedMat, slotName: rawMatName });
+              // Default to Red on initial load
+              applyColorToMaterial(clonedMat, rawMatName, '/textures/red');
             }
           });
         }
@@ -219,7 +229,7 @@ function initThreeViewer(id, modelPath) {
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
-  // Swatch Click: Tint Color Only
+  // Swatch Click: Swap all 28 texture maps to the target color set
   const swatchContainer = document.getElementById(`swatches-${id}`);
   swatchContainer.addEventListener('click', (e) => {
     const target = e.target.closest('.swatch');
@@ -228,11 +238,10 @@ function initThreeViewer(id, modelPath) {
     swatchContainer.querySelectorAll('.swatch').forEach((btn) => btn.classList.remove('active'));
     target.classList.add('active');
 
-    const hexColor = target.getAttribute('data-hex');
-    if (hexColor) {
-      fabricMaterials.forEach((mat) => {
-        mat.color.set(hexColor);
-        mat.needsUpdate = true;
+    const targetFolder = target.getAttribute('data-folder');
+    if (targetFolder) {
+      trackedMaterials.forEach(({ material, slotName }) => {
+        applyColorToMaterial(material, slotName, targetFolder);
       });
     }
   });
