@@ -2,9 +2,9 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
+import QRCode from 'qrcode';
 
-// Fixed import path: style.css inside src/
-import './style.css';
+import '../style.css';
 
 const products = [
   { id: 'p1', name: 'Product 1', price: '$29.99', file: '/models/model1.glb' },
@@ -14,30 +14,54 @@ const products = [
   { id: 'p5', name: 'Product 5', price: '$199.99', file: '/models/model5.glb' },
 ];
 
-// 2 Color Options: Red and Blue
 const colorOptions = [
   { id: 'red', name: 'Red Fabric', folder: '/textures/red', swatchColor: '#802B2B' },
   { id: 'blue', name: 'Blue Fabric', folder: '/textures/blue', swatchColor: '#2A4B7C' },
 ];
 
+// Map to track active selected color folder per product ID
+const activeProductColors = new Map();
+
 const grid = document.getElementById('product-grid');
 const textureLoader = new THREE.TextureLoader();
 const textureCache = {};
 
+// Modal DOM elements
+const qrModal = document.getElementById('qr-modal');
+const modalCloseBtn = document.getElementById('modal-close');
+const qrCanvas = document.getElementById('qr-canvas');
+
+if (modalCloseBtn && qrModal) {
+  modalCloseBtn.addEventListener('click', () => {
+    qrModal.classList.add('hidden');
+  });
+
+  qrModal.addEventListener('click', (e) => {
+    if (e.target === qrModal) {
+      qrModal.classList.add('hidden');
+    }
+  });
+}
+
 // Render Product Cards into DOM
 if (grid) {
   products.forEach((prod) => {
+    // Set default color for each product
+    activeProductColors.set(prod.id, '/textures/red');
+
     const card = document.createElement('div');
     card.className = 'card';
 
     const swatchesHTML = colorOptions
-      .map((opt, index) => `
+      .map(
+        (opt, index) => `
         <button 
           class="swatch ${index === 0 ? 'active' : ''}" 
           style="background-color: ${opt.swatchColor};" 
           data-folder="${opt.folder}"
           title="${opt.name}">
-        </button>`)
+        </button>`
+      )
       .join('');
 
     card.innerHTML = `
@@ -49,6 +73,9 @@ if (grid) {
           <span>Select Color</span>
           <div class="swatches" id="swatches-${prod.id}">${swatchesHTML}</div>
         </div>
+        <button class="vr-btn" data-id="${prod.id}">
+          👓 View in VR / AR
+        </button>
       </div>
     `;
     grid.appendChild(card);
@@ -56,6 +83,30 @@ if (grid) {
     initThreeViewer(prod.id, prod.file);
   });
 }
+
+// Delegate VR button click events
+document.addEventListener('click', (e) => {
+  const vrBtn = e.target.closest('.vr-btn');
+  if (!vrBtn) return;
+
+  const prodId = vrBtn.getAttribute('data-id');
+  const selectedColor = activeProductColors.get(prodId) || '/textures/red';
+
+  // Construct target URL
+  const arUrl = new URL(`${window.location.origin}/ar.html`);
+  arUrl.searchParams.set('model', prodId);
+  arUrl.searchParams.set('color', selectedColor);
+
+  if (qrCanvas && qrModal) {
+    QRCode.toCanvas(qrCanvas, arUrl.toString(), { width: 220 }, (error) => {
+      if (error) {
+        console.error('Error generating QR code:', error);
+        return;
+      }
+      qrModal.classList.remove('hidden');
+    });
+  }
+});
 
 function prepTexture(tex, isColor = false) {
   tex.flipY = false;
@@ -67,7 +118,6 @@ function prepTexture(tex, isColor = false) {
   return tex;
 }
 
-// Pre-cache and load texture maps per slot (Fabric_Mat_A through Fabric_Mat_G)
 async function getSlotTextures(folderPath, slotName) {
   if (!textureCache[folderPath]) {
     textureCache[folderPath] = {};
@@ -106,13 +156,11 @@ async function applyColorToMaterial(material, slotName, folderPath) {
   material.color.setHex(0xffffff);
   material.map = maps.baseColorMap;
 
-  // Soften normal map bump intensity to eliminate harsh glare
   material.normalMap = maps.normalMap;
   if (material.normalScale) {
     material.normalScale.set(0.2, 0.2);
   }
 
-  // Slot G is metallic legs/frame; slots A through F are fabric
   if (slotName === 'Fabric_Mat_G') {
     material.roughnessMap = maps.roughnessMap;
     material.metalnessMap = maps.metallicMap;
@@ -121,7 +169,6 @@ async function applyColorToMaterial(material, slotName, folderPath) {
   } else {
     material.metalnessMap = null;
     material.metalness = 0.0;
-    // Set high roughness (1.0) so red matches the matte finish of the blue sofa
     material.roughnessMap = maps.roughnessMap;
     material.roughness = 1.0;
   }
@@ -151,7 +198,6 @@ function initThreeViewer(id, modelPath) {
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
   container.appendChild(renderer.domElement);
 
-  // Studio Lighting
   const rgbeLoader = new RGBELoader();
   rgbeLoader.load(
     'https://dl.polyhaven.org/file/ph-assets/HDRIs/hdr/1k/studio_small_09_1k.hdr',
@@ -191,7 +237,6 @@ function initThreeViewer(id, modelPath) {
 
   const trackedMaterials = [];
 
-  // Load GLB Model
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
@@ -216,14 +261,12 @@ function initThreeViewer(id, modelPath) {
             const rawMatName = clonedMat.name || '';
             if (rawMatName.startsWith('Fabric_Mat_')) {
               trackedMaterials.push({ material: clonedMat, slotName: rawMatName });
-              // Default load Red color
               applyColorToMaterial(clonedMat, rawMatName, '/textures/red');
             }
           });
         }
       });
 
-      // Auto-center and fit model
       const box = new THREE.Box3().setFromObject(loadedModel);
       const size = box.getSize(new THREE.Vector3());
       const maxDim = Math.max(size.x, size.y, size.z);
@@ -248,7 +291,6 @@ function initThreeViewer(id, modelPath) {
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
-  // Swatch Click: Swap texture set
   const swatchContainer = document.getElementById(`swatches-${id}`);
   if (swatchContainer) {
     swatchContainer.addEventListener('click', (e) => {
@@ -260,6 +302,9 @@ function initThreeViewer(id, modelPath) {
 
       const targetFolder = target.getAttribute('data-folder');
       if (targetFolder) {
+        // Track currently selected color folder for this product
+        activeProductColors.set(id, targetFolder);
+
         trackedMaterials.forEach(({ material, slotName }) => {
           applyColorToMaterial(material, slotName, targetFolder);
         });

@@ -4,7 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Amazon 3D Showcase</title>
-    <link rel="stylesheet" href="/style.css" />
   </head>
   <body>
     <header>
@@ -14,6 +13,19 @@
       <h2>Featured 3D Products</h2>
       <div id="product-grid"></div>
     </main>
+
+    <!-- QR Code Popup Modal -->
+    <div id="qr-modal" class="modal-overlay hidden">
+      <div class="modal-content">
+        <button id="modal-close" class="close-btn">&times;</button>
+        <h3>Scan to View in VR / AR</h3>
+        <p>Use your phone camera to scan the QR code and view this sofa in your space.</p>
+        <div class="qr-container">
+          <canvas id="qr-canvas"></canvas>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
