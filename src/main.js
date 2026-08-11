@@ -11,44 +11,18 @@ const products = [
   { id: 'p5', name: 'Product 5', price: '$199.99', file: '/models/model5.glb' },
 ];
 
-// Define all 7 fabric texture options
-const textureOptions = [
-  { id: 'mat_a', name: 'Fabric Option A', prefix: 'Fabric_Mat_A' },
-  { id: 'mat_b', name: 'Fabric Option B', prefix: 'Fabric_Mat_B' },
-  { id: 'mat_c', name: 'Fabric Option C', prefix: 'Fabric_Mat_C' },
-  { id: 'mat_d', name: 'Fabric Option D', prefix: 'Fabric_Mat_D' },
-  { id: 'mat_e', name: 'Fabric Option E', prefix: 'Fabric_Mat_E' },
-  { id: 'mat_f', name: 'Fabric Option F', prefix: 'Fabric_Mat_F' },
-  { id: 'mat_g', name: 'Fabric Option G', prefix: 'Fabric_Mat_G' },
-];
-
 const grid = document.getElementById('product-grid');
 const textureLoader = new THREE.TextureLoader();
 
 products.forEach((prod) => {
   const card = document.createElement('div');
   card.className = 'card';
-  
-  // Create 7 swatch buttons with BaseColor preview images
-  const swatchesHTML = textureOptions
-    .map((opt, index) => `
-      <button 
-        class="swatch ${index === 0 ? 'active' : ''}" 
-        style="background-image: url('/textures/${opt.prefix}_BaseColor.jpg')" 
-        data-prefix="${opt.prefix}"
-        title="${opt.name}">
-      </button>`)
-    .join('');
 
   card.innerHTML = `
     <div class="canvas-box" id="canvas-${prod.id}"></div>
     <div class="details">
       <div class="title">${prod.name}</div>
       <div class="price">${prod.price}</div>
-      <div class="color-section">
-        <span>Fabric Options</span>
-        <div class="swatches" id="swatches-${prod.id}">${swatchesHTML}</div>
-      </div>
     </div>
   `;
   grid.appendChild(card);
@@ -114,10 +88,6 @@ function initThreeViewer(id, modelPath) {
   controls.maxPolarAngle = Math.PI / 2 - 0.01;
   controls.enablePan = false;
 
-  let loadedModel = null;
-  const fabricMaterialSlots = [];
-  const metalMaterialSlots = [];
-
   function prepTexture(tex, isColor = false) {
     tex.flipY = false;
     tex.wrapS = THREE.RepeatWrapping;
@@ -128,11 +98,9 @@ function initThreeViewer(id, modelPath) {
     return tex;
   }
 
-  async function applyCustomTextures(prefix) {
-    if (!loadedModel) return;
-
+  async function loadSlotTexture(material, slotName) {
     try {
-      const basePath = `/textures/${prefix}`;
+      const basePath = `/textures/${slotName}`;
       const [baseColorMap, normalMap, roughnessMap, metallicMap] = await Promise.all([
         textureLoader.loadAsync(`${basePath}_BaseColor.jpg`),
         textureLoader.loadAsync(`${basePath}_Normal.jpg`),
@@ -145,40 +113,34 @@ function initThreeViewer(id, modelPath) {
       prepTexture(roughnessMap, false);
       prepTexture(metallicMap, false);
 
-      // Apply selected fabric maps to cushion / main body slots
-      fabricMaterialSlots.forEach((mat) => {
-        mat.color.setHex(0xffffff);
-        mat.map = baseColorMap;
-        mat.normalMap = normalMap;
-        mat.roughnessMap = roughnessMap;
-        mat.metalnessMap = null;
-        mat.metalness = 0.0;
-        mat.roughness = 0.85;
-        mat.needsUpdate = true;
-      });
+      material.color.setHex(0xffffff);
+      material.map = baseColorMap;
+      material.normalMap = normalMap;
+      material.roughnessMap = roughnessMap;
 
-      // Maintain metallic finish for logo, handle, and mechanisms
-      metalMaterialSlots.forEach((mat) => {
-        mat.color.setHex(0xffffff);
-        mat.map = metallicMap;
-        mat.metalnessMap = metallicMap;
-        mat.normalMap = null;
-        mat.roughnessMap = roughnessMap;
-        mat.metalness = 1.0;
-        mat.roughness = 0.25;
-        mat.needsUpdate = true;
-      });
+      // Slot G is metallic frame/mechanism; A through F are non-metallic fabrics
+      if (slotName === 'Fabric_Mat_G') {
+        material.metalnessMap = metallicMap;
+        material.metalness = 1.0;
+        material.roughness = 0.25;
+      } else {
+        material.metalnessMap = null;
+        material.metalness = 0.0;
+        material.roughness = 0.85;
+      }
+
+      material.needsUpdate = true;
     } catch (err) {
-      console.error(`Error loading textures for prefix standard ${prefix}:`, err);
+      console.error(`Failed loading textures for slot ${slotName}:`, err);
     }
   }
 
-  // Load Model
+  // Load Model and map each slot to its respective UV texture set
   const loader = new GLTFLoader();
   loader.load(
     modelPath,
     (gltf) => {
-      loadedModel = gltf.scene;
+      const loadedModel = gltf.scene;
 
       loadedModel.traverse((child) => {
         if (child.isMesh) {
@@ -196,20 +158,10 @@ function initThreeViewer(id, modelPath) {
             }
 
             const rawMatName = clonedMat.name || '';
-            const matName = rawMatName.toLowerCase();
-            const meshName = (child.name || '').toLowerCase();
-
-            const isMetal = rawMatName === 'Fabric_Mat_G' ||
-                            matName.includes('mechanism') ||
-                            matName.includes('logo') ||
-                            matName.includes('handle') ||
-                            meshName.includes('fg_logo') ||
-                            meshName.includes('fg_mechanism');
-
-            if (isMetal) {
-              metalMaterialSlots.push(clonedMat);
-            } else {
-              fabricMaterialSlots.push(clonedMat);
+            
+            // Map each material slot name directly to its matching texture set (Fabric_Mat_A .. G)
+            if (rawMatName.startsWith('Fabric_Mat_')) {
+              loadSlotTexture(clonedMat, rawMatName);
             }
           });
         }
@@ -235,28 +187,10 @@ function initThreeViewer(id, modelPath) {
       const modelHeight = scaledBox.max.y - scaledBox.min.y;
       controls.target.set(0, modelHeight / 2, 0);
       controls.update();
-
-      // Load initial fabric option (Fabric_Mat_A)
-      applyCustomTextures('Fabric_Mat_A');
     },
     undefined,
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
-
-  // Swatch Click Handler
-  const swatchContainer = document.getElementById(`swatches-${id}`);
-  swatchContainer.addEventListener('click', (e) => {
-    const target = e.target.closest('.swatch');
-    if (!target) return;
-
-    swatchContainer.querySelectorAll('.swatch').forEach(btn => btn.classList.remove('active'));
-    target.classList.add('active');
-
-    const prefix = target.getAttribute('data-prefix');
-    if (prefix) {
-      applyCustomTextures(prefix);
-    }
-  });
 
   window.addEventListener('resize', () => {
     const w = container.clientWidth;
