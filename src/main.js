@@ -3,6 +3,9 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 
+// Fixed import path: style.css inside src/
+import './style.css';
+
 const products = [
   { id: 'p1', name: 'Product 1', price: '$29.99', file: '/models/model1.glb' },
   { id: 'p2', name: 'Product 2', price: '$49.99', file: '/models/model2.glb' },
@@ -11,7 +14,7 @@ const products = [
   { id: 'p5', name: 'Product 5', price: '$199.99', file: '/models/model5.glb' },
 ];
 
-// Only 2 Color Options: Red and Blue
+// 2 Color Options: Red and Blue
 const colorOptions = [
   { id: 'red', name: 'Red Fabric', folder: '/textures/red', swatchColor: '#802B2B' },
   { id: 'blue', name: 'Blue Fabric', folder: '/textures/blue', swatchColor: '#2A4B7C' },
@@ -21,31 +24,38 @@ const grid = document.getElementById('product-grid');
 const textureLoader = new THREE.TextureLoader();
 const textureCache = {};
 
-products.forEach((prod) => {
-  const card = document.createElement('div');
-  card.className = 'card';
+// Render Product Cards into DOM
+if (grid) {
+  products.forEach((prod) => {
+    const card = document.createElement('div');
+    card.className = 'card';
 
-  const swatchesHTML = colorOptions
-    .map((opt, index) => `
-      
-      `)
-    .join('');
+    const swatchesHTML = colorOptions
+      .map((opt, index) => `
+        <button 
+          class="swatch ${index === 0 ? 'active' : ''}" 
+          style="background-color: ${opt.swatchColor};" 
+          data-folder="${opt.folder}"
+          title="${opt.name}">
+        </button>`)
+      .join('');
 
-  card.innerHTML = `
-    
-    
-      ${prod.name}
-      ${prod.price}
-      
-        Select Color
-        ${swatchesHTML}
-      
-    
-  `;
-  grid.appendChild(card);
+    card.innerHTML = `
+      <div class="canvas-box" id="canvas-${prod.id}"></div>
+      <div class="details">
+        <div class="title">${prod.name}</div>
+        <div class="price">${prod.price}</div>
+        <div class="color-section">
+          <span>Select Color</span>
+          <div class="swatches" id="swatches-${prod.id}">${swatchesHTML}</div>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
 
-  initThreeViewer(prod.id, prod.file);
-});
+    initThreeViewer(prod.id, prod.file);
+  });
+}
 
 function prepTexture(tex, isColor = false) {
   tex.flipY = false;
@@ -57,7 +67,7 @@ function prepTexture(tex, isColor = false) {
   return tex;
 }
 
-// Load and cache all 4 texture maps for a given material slot and color folder
+// Pre-cache and load texture maps per slot (Fabric_Mat_A through Fabric_Mat_G)
 async function getSlotTextures(folderPath, slotName) {
   if (!textureCache[folderPath]) {
     textureCache[folderPath] = {};
@@ -98,7 +108,7 @@ async function applyColorToMaterial(material, slotName, folderPath) {
   material.normalMap = maps.normalMap;
   material.roughnessMap = maps.roughnessMap;
 
-  // Slot G is metallic frame/handle; slots A through F are fabric
+  // Slot G is metallic handle/legs; slots A through F are fabric
   if (slotName === 'Fabric_Mat_G') {
     material.metalnessMap = maps.metallicMap;
     material.metalness = 1.0;
@@ -141,7 +151,9 @@ function initThreeViewer(id, modelPath) {
     (hdrTexture) => {
       hdrTexture.mapping = THREE.EquirectangularReflectionMapping;
       scene.environment = hdrTexture;
-    }
+    },
+    undefined,
+    (err) => console.warn('HDR environment load warning:', err)
   );
 
   const shadowLight = new THREE.DirectionalLight(0xffffff, 1.2);
@@ -197,7 +209,7 @@ function initThreeViewer(id, modelPath) {
             const rawMatName = clonedMat.name || '';
             if (rawMatName.startsWith('Fabric_Mat_')) {
               trackedMaterials.push({ material: clonedMat, slotName: rawMatName });
-              // Default to Red on initial load
+              // Load default Red color set
               applyColorToMaterial(clonedMat, rawMatName, '/textures/red');
             }
           });
@@ -229,22 +241,24 @@ function initThreeViewer(id, modelPath) {
     (err) => console.error(`Error loading GLB ${modelPath}:`, err)
   );
 
-  // Swatch Click: Swap all 28 texture maps to the target color set
+  // Swatch Click: Swap all 28 maps to target color set
   const swatchContainer = document.getElementById(`swatches-${id}`);
-  swatchContainer.addEventListener('click', (e) => {
-    const target = e.target.closest('.swatch');
-    if (!target) return;
+  if (swatchContainer) {
+    swatchContainer.addEventListener('click', (e) => {
+      const target = e.target.closest('.swatch');
+      if (!target) return;
 
-    swatchContainer.querySelectorAll('.swatch').forEach((btn) => btn.classList.remove('active'));
-    target.classList.add('active');
+      swatchContainer.querySelectorAll('.swatch').forEach((btn) => btn.classList.remove('active'));
+      target.classList.add('active');
 
-    const targetFolder = target.getAttribute('data-folder');
-    if (targetFolder) {
-      trackedMaterials.forEach(({ material, slotName }) => {
-        applyColorToMaterial(material, slotName, targetFolder);
-      });
-    }
-  });
+      const targetFolder = target.getAttribute('data-folder');
+      if (targetFolder) {
+        trackedMaterials.forEach(({ material, slotName }) => {
+          applyColorToMaterial(material, slotName, targetFolder);
+        });
+      }
+    });
+  }
 
   window.addEventListener('resize', () => {
     const w = container.clientWidth;
