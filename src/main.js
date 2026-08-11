@@ -13,7 +13,7 @@ const products = [
 
 // Color Swatch Palette
 const colorOptions = [
-  { id: 'original', name: 'Original Maroon', hex: '#ffffff' }, // #ffffff keeps exact texture file color
+  { id: 'original', name: 'Original Maroon', hex: '#ffffff' }, // #ffffff preserves base texture color
   { id: 'espresso', name: 'Espresso Brown', hex: '#3E2723' },
   { id: 'navy', name: 'Midnight Navy', hex: '#1A237E' },
   { id: 'charcoal', name: 'Charcoal Grey', hex: '#212121' },
@@ -127,8 +127,8 @@ function initThreeViewer(id, modelPath) {
 
   async function loadSlotTexture(material, slotName) {
     try {
-      // Looks directly in public/textures/ or public/textures/fabric1/
-      const basePath = `/textures/fabric1/${slotName}`;
+      // Direct path to public/textures/
+      const basePath = `/textures/${slotName}`;
       const [baseColorMap, normalMap, roughnessMap, metallicMap] = await Promise.all([
         textureLoader.loadAsync(`${basePath}_BaseColor.jpg`),
         textureLoader.loadAsync(`${basePath}_Normal.jpg`),
