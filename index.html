@@ -4,10 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>3D Sofa Collection</title>
+    <!-- Model Viewer -->
     <script
       type="module"
       src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"
     ></script>
+    <!-- Three.js CDN for Custom Light Injection -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- QRCode CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
       * {
         margin: 0;
@@ -96,25 +101,109 @@
       .swatch-blue {
         background-color: #1a365d;
       }
-      .ar-btn {
-        width: 100%;
-        background-color: #000000;
-        color: #ffffff;
+      
+      .action-buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: auto;
+      }
+      .btn {
+        flex: 1;
         border: none;
         border-radius: 12px;
-        padding: 14px;
-        font-size: 15px;
+        padding: 14px 10px;
+        font-size: 14px;
         font-weight: 600;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
-        gap: 8px;
-        margin-top: auto;
-        transition: background-color 0.2s;
+        gap: 6px;
+        transition: all 0.2s ease;
       }
-      .ar-btn:hover {
+      .btn-3d {
+        background-color: #e8e8ed;
+        color: #1d1d1f;
+      }
+      .btn-3d:hover {
+        background-color: #d2d2d7;
+      }
+      .btn-ar {
+        background-color: #000000;
+        color: #ffffff;
+      }
+      .btn-ar:hover {
         background-color: #2c2c2e;
+      }
+
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(8px);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-overlay.active {
+        display: flex;
+      }
+      .modal-card {
+        background: #ffffff;
+        border-radius: 24px;
+        padding: 32px;
+        max-width: 360px;
+        width: 90%;
+        text-align: center;
+        position: relative;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        animation: popIn 0.25s ease-out;
+      }
+      @keyframes popIn {
+        from { transform: scale(0.9); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+      }
+      .close-btn {
+        position: absolute;
+        top: 16px;
+        right: 20px;
+        font-size: 24px;
+        font-weight: bold;
+        color: #86868b;
+        cursor: pointer;
+        background: none;
+        border: none;
+      }
+      .close-btn:hover {
+        color: #1d1d1f;
+      }
+      .modal-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #1d1d1f;
+        margin-bottom: 8px;
+      }
+      .modal-subtitle {
+        font-size: 13px;
+        color: #86868b;
+        margin-bottom: 24px;
+        line-height: 1.4;
+      }
+      .qr-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 16px;
+        background: #f5f5f7;
+        border-radius: 16px;
+        margin-bottom: 16px;
+      }
+      .qr-container img {
+        margin: 0 auto;
       }
     </style>
   </head>
@@ -130,7 +219,9 @@
             camera-controls
             touch-action="pan-y"
             auto-rotate
-            shadow-intensity="1"
+            shadow-intensity="0.1"
+            shadow-softness="1"
+            exposure="1.8"
             max-camera-orbit="auto 85deg auto"
             min-camera-orbit="auto auto 1.5m"
             min-field-of-view="35deg"
@@ -144,7 +235,10 @@
           <div class="swatch swatch-red selected" data-texture="red"></div>
           <div class="swatch swatch-blue" data-texture="blue"></div>
         </div>
-        <button class="ar-btn">🕶️ View in VR / AR</button>
+        <div class="action-buttons">
+          <button class="btn btn-3d">View in 3D</button>
+          <button class="btn btn-ar">🕶️ View in VR / AR</button>
+        </div>
       </div>
 
       <!-- Card 2 -->
@@ -155,7 +249,9 @@
             camera-controls
             touch-action="pan-y"
             auto-rotate
-            shadow-intensity="1"
+            shadow-intensity="0.1"
+            shadow-softness="1"
+            exposure="1.8"
             max-camera-orbit="auto 85deg auto"
             min-camera-orbit="auto auto 1.5m"
             min-field-of-view="35deg"
@@ -169,7 +265,10 @@
           <div class="swatch swatch-red selected" data-texture="red"></div>
           <div class="swatch swatch-blue" data-texture="blue"></div>
         </div>
-        <button class="ar-btn">🕶️ View in VR / AR</button>
+        <div class="action-buttons">
+          <button class="btn btn-3d">View in 3D</button>
+          <button class="btn btn-ar">🕶️ View in VR / AR</button>
+        </div>
       </div>
 
       <!-- Card 3 -->
@@ -180,7 +279,9 @@
             camera-controls
             touch-action="pan-y"
             auto-rotate
-            shadow-intensity="1"
+            shadow-intensity="0.1"
+            shadow-softness="1"
+            exposure="1.8"
             max-camera-orbit="auto 85deg auto"
             min-camera-orbit="auto auto 1.5m"
             min-field-of-view="35deg"
@@ -194,7 +295,10 @@
           <div class="swatch swatch-red selected" data-texture="red"></div>
           <div class="swatch swatch-blue" data-texture="blue"></div>
         </div>
-        <button class="ar-btn">🕶️ View in VR / AR</button>
+        <div class="action-buttons">
+          <button class="btn btn-3d">View in 3D</button>
+          <button class="btn btn-ar">🕶️ View in VR / AR</button>
+        </div>
       </div>
 
       <!-- Card 4 -->
@@ -205,7 +309,9 @@
             camera-controls
             touch-action="pan-y"
             auto-rotate
-            shadow-intensity="1"
+            shadow-intensity="0.1"
+            shadow-softness="1"
+            exposure="1.8"
             max-camera-orbit="auto 85deg auto"
             min-camera-orbit="auto auto 1.5m"
             min-field-of-view="35deg"
@@ -219,7 +325,10 @@
           <div class="swatch swatch-red selected" data-texture="red"></div>
           <div class="swatch swatch-blue" data-texture="blue"></div>
         </div>
-        <button class="ar-btn">🕶️ View in VR / AR</button>
+        <div class="action-buttons">
+          <button class="btn btn-3d">View in 3D</button>
+          <button class="btn btn-ar">🕶️ View in VR / AR</button>
+        </div>
       </div>
 
       <!-- Card 5 -->
@@ -230,7 +339,9 @@
             camera-controls
             touch-action="pan-y"
             auto-rotate
-            shadow-intensity="1"
+            shadow-intensity="0.1"
+            shadow-softness="1"
+            exposure="1.8"
             max-camera-orbit="auto 85deg auto"
             min-camera-orbit="auto auto 1.5m"
             min-field-of-view="35deg"
@@ -244,7 +355,22 @@
           <div class="swatch swatch-red selected" data-texture="red"></div>
           <div class="swatch swatch-blue" data-texture="blue"></div>
         </div>
-        <button class="ar-btn">🕶️ View in VR / AR</button>
+        <div class="action-buttons">
+          <button class="btn btn-3d">View in 3D</button>
+          <button class="btn btn-ar">🕶️ View in VR / AR</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR Code Modal -->
+    <div id="qr-modal" class="modal-overlay">
+      <div class="modal-card">
+        <button id="close-modal" class="close-btn">&times;</button>
+        <h3 class="modal-title">Scan to View in VR / AR</h3>
+        <p class="modal-subtitle">Scan this QR code with your phone camera to place this model in your room.</p>
+        <div class="qr-container">
+          <div id="qrcode"></div>
+        </div>
       </div>
     </div>
 
@@ -252,7 +378,35 @@
       const MIN_ALLOWED_RADIUS = 1.5;
       const MIN_ALLOWED_FOV = 35;
 
-      // Function to apply texture maps to a specific card's viewer
+      const modal = document.getElementById('qr-modal');
+      const closeModalBtn = document.getElementById('close-modal');
+      const qrContainer = document.getElementById('qrcode');
+
+      // Function to inject custom soft fill lights on the right/rear-right side
+      function addRightFillLight(viewer) {
+        const symbols = Object.getOwnPropertySymbols(viewer);
+        const sceneSymbol = symbols.find(
+          (sym) => sym.description === 'scene' || sym.description === 'Three.js Scene'
+        );
+
+        if (sceneSymbol && viewer[sceneSymbol]) {
+          const scene = viewer[sceneSymbol];
+
+          if (!scene.getObjectByName('RightFillLight')) {
+            // Directional light on the right/back-right
+            const fillLight = new THREE.DirectionalLight(0xfff4e5, 1.2);
+            fillLight.name = 'RightFillLight';
+            fillLight.position.set(2.5, 1.5, -2.0);
+            scene.add(fillLight);
+
+            // General ambient light boost to eliminate pure pitch-black shadows
+            const ambientFill = new THREE.AmbientLight(0xffffff, 0.4);
+            ambientFill.name = 'RightAmbientFill';
+            scene.add(ambientFill);
+          }
+        }
+      }
+
       async function applyTexturesToViewer(viewer, textureKey) {
         if (!viewer.model || !viewer.model.materials) return;
 
@@ -261,6 +415,14 @@
           const matMatch = matName.match(/Fabric_Mat_[A-G]/i);
           const targetMatName = matMatch ? matMatch[0] : 'Fabric_Mat_A';
           const basePath = `/textures/${textureKey}/${targetMatName}`;
+
+          if (material.pbrMetallicRoughness) {
+            material.pbrMetallicRoughness.setBaseColorFactor([1, 1, 1, 1]);
+          }
+
+          if (material.occlusionTexture) {
+            material.occlusionTexture.setTexture(null);
+          }
 
           try {
             const baseColorTex = await viewer.createTexture(`${basePath}_BaseColor.jpg`);
@@ -283,15 +445,14 @@
         }
       }
 
-      // Initialize logic independently for each product card
       document.querySelectorAll('.card').forEach(card => {
         const viewer = card.querySelector('model-viewer');
         const swatches = card.querySelectorAll('.swatch');
-        const arBtn = card.querySelector('.ar-btn');
+        const btn3d = card.querySelector('.btn-3d');
+        const btnAr = card.querySelector('.btn-ar');
         const modelUrl = card.getAttribute('data-model');
         let selectedTexture = 'red';
 
-        // Camera zoom guard per card
         viewer.addEventListener('camera-change', () => {
           const orbit = viewer.getCameraOrbit();
           const fov = viewer.getFieldOfView();
@@ -304,12 +465,11 @@
           }
         });
 
-        // Re-apply selected texture when model finishes loading
         viewer.addEventListener('load', () => {
           applyTexturesToViewer(viewer, selectedTexture);
+          addRightFillLight(viewer);
         });
 
-        // Texture swatch handler per card
         swatches.forEach(swatch => {
           swatch.addEventListener('click', async () => {
             swatches.forEach(s => s.classList.remove('selected'));
@@ -319,10 +479,34 @@
           });
         });
 
-        // AR button handler per card
-        arBtn.addEventListener('click', () => {
+        btn3d.addEventListener('click', () => {
           window.location.href = `ar.html?model=${encodeURIComponent(modelUrl)}&texture=${selectedTexture}`;
         });
+
+        btnAr.addEventListener('click', () => {
+          const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+          const fullArUrl = `${window.location.origin}/ar.html?model=${encodeURIComponent(modelUrl)}&texture=${selectedTexture}`;
+
+          if (isMobile) {
+            window.location.href = fullArUrl;
+          } else {
+            qrContainer.innerHTML = '';
+            new QRCode(qrContainer, {
+              text: fullArUrl,
+              width: 200,
+              height: 200,
+              colorDark: "#000000",
+              colorLight: "#ffffff",
+              correctLevel: QRCode.CorrectLevel.H
+            });
+            modal.classList.add('active');
+          }
+        });
+      });
+
+      closeModalBtn.addEventListener('click', () => modal.classList.remove('active'));
+      modal.addEventListener('click', (e) => {
+        if (e.target === modal) modal.classList.remove('active');
       });
     </script>
   </body>
