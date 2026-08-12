@@ -4,7 +4,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { RGBELoader } from 'three/examples/jsm/loaders/RGBELoader.js';
 import QRCode from 'qrcode';
 
-import '../style.css';
+import './style.css';
 
 const products = [
   { id: 'p1', name: 'Product 1', price: '$29.99', file: '/models/model1.glb' },
