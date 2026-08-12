@@ -2,104 +2,113 @@
   box-sizing: border-box;
   margin: 0;
   padding: 0;
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 }
 
 body {
-  background-color: #f8f9fa;
-  color: #1a1a1a;
-  padding: 32px 24px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: #f5f5f7;
+  color: #1d1d1f;
+  padding: 40px 20px;
 }
 
-header h1 {
-  font-size: 2.2rem;
+.header {
+  max-width: 1200px;
+  margin: 0 auto 30px auto;
+}
+
+.header h1 {
+  font-size: 32px;
   font-weight: 700;
-  margin-bottom: 8px;
 }
 
-h2 {
-  font-size: 1.25rem;
-  font-weight: 500;
-  margin-bottom: 28px;
-  color: #6c757d;
+.header p {
+  color: #6e6e73;
+  margin-top: 4px;
 }
 
-#product-grid {
+/* Product Grid Layout */
+.product-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 28px;
-  max-width: 1400px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 24px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 
-.card {
+/* Product Cards */
+.product-card {
   background: #ffffff;
-  border-radius: 12px;
+  border-radius: 16px;
   overflow: hidden;
-  border: 1px solid #e9ecef;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.03);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.05);
+  display: flex;
+  flex-direction: column;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
 
-.card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+.product-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
 }
 
-.canvas-box {
+/* Essential: Canvas container MUST have an explicit height */
+.canvas-container {
   width: 100%;
   height: 280px;
-  background-color: #f8f9fa;
+  background-color: #fbfbfd;
   position: relative;
 }
 
-.canvas-box canvas {
+.canvas-container canvas {
   width: 100% !important;
   height: 100% !important;
   display: block;
 }
 
-.details {
+/* Product Details */
+.product-info {
   padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.title {
-  font-size: 1.1rem;
+.product-info h3 {
+  font-size: 18px;
   font-weight: 600;
-  margin-bottom: 4px;
 }
 
 .price {
-  font-size: 1rem;
-  color: #0f1111;
+  font-size: 16px;
   font-weight: 700;
-  margin-bottom: 16px;
+  color: #1d1d1f;
 }
 
-.color-section span {
-  display: block;
-  font-size: 0.85rem;
-  color: #565959;
-  font-weight: 600;
-  margin-bottom: 10px;
+/* Color Swatches */
+.color-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.color-selector span {
+  font-size: 12px;
+  color: #86868b;
+  font-weight: 500;
 }
 
 .swatches {
   display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 16px;
+  gap: 10px;
 }
 
 .swatch {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
-  border: 2px solid #e2e8f0;
+  border: 2px solid transparent;
   cursor: pointer;
-  outline: none;
-  transition: all 0.2s ease;
-  position: relative;
+  transition: transform 0.2s ease;
 }
 
 .swatch:hover {
@@ -107,100 +116,72 @@ h2 {
 }
 
 .swatch.active {
-  border: 2px solid #000000;
-  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.2);
-  transform: scale(1.1);
+  border-color: #0071e3;
 }
 
-/* VR/AR Button Styles */
-.vr-btn {
-  width: 100%;
-  padding: 10px 16px;
+/* Action Button */
+.ar-btn {
   background-color: #000000;
   color: #ffffff;
   border: none;
+  padding: 12px;
   border-radius: 8px;
   font-weight: 600;
-  font-size: 0.9rem;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
+  margin-top: 8px;
   transition: background-color 0.2s ease;
 }
 
-.vr-btn:hover {
-  background-color: #333333;
+.ar-btn:hover {
+  background-color: #2c2c2e;
 }
 
-/* Modal Overlay & QR Styles */
-.modal-overlay {
+/* AR QR Modal */
+.modal {
   position: fixed;
   top: 0;
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: rgba(0, 0, 0, 0.6);
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(4px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
 }
 
-.modal-overlay.hidden {
+.modal.hidden {
   display: none;
 }
 
 .modal-content {
   background: #ffffff;
-  padding: 32px;
-  border-radius: 16px;
-  max-width: 400px;
-  width: 90%;
+  padding: 30px;
+  border-radius: 20px;
   text-align: center;
   position: relative;
-  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+  max-width: 360px;
+  width: 90%;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
 }
 
 .close-btn {
   position: absolute;
-  top: 16px;
-  right: 20px;
+  top: 12px;
+  right: 16px;
   background: none;
   border: none;
-  font-size: 1.8rem;
+  font-size: 24px;
   cursor: pointer;
-  color: #6c757d;
-}
-
-.close-btn:hover {
-  color: #000000;
-}
-
-.modal-content h3 {
-  font-size: 1.3rem;
-  margin-bottom: 8px;
-}
-
-.modal-content p {
-  font-size: 0.9rem;
-  color: #565959;
-  margin-bottom: 20px;
+  color: #86868b;
 }
 
 .qr-container {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 16px;
-  background: #f8f9fa;
-  border-radius: 12px;
-  border: 1px solid #e9ecef;
+  margin-top: 20px;
 }
 
-#qr-canvas {
-  width: 220px !important;
-  height: 220px !important;
+.qr-container img {
+  width: 200px;
+  height: 200px;
 }

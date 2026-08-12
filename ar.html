@@ -1,75 +1,73 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AR Preview - Amazon 3D Store</title>
-  
-  <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D & AR Viewer</title>
+    <!-- Load Google Model Viewer for Web & Mobile AR -->
+    <script
+      type="module"
+      src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"
+    ></script>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body, html {
+        width: 100%;
+        height: 100%;
+        overflow: hidden;
+        background-color: #f5f5f7;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      }
+      model-viewer {
+        width: 100%;
+        height: 100%;
+      }
+      .ar-button {
+        position: absolute;
+        bottom: 30px;
+        left: 50%;
+        transform: translateX(-50%);
+        background-color: #0071e3;
+        color: #ffffff;
+        border: none;
+        border-radius: 25px;
+        padding: 14px 28px;
+        font-size: 16px;
+        font-weight: 600;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <model-viewer
+      id="ar-viewer"
+      src=""
+      ar
+      ar-modes="webxr scene-viewer quick-look"
+      camera-controls
+      touch-action="pan-y"
+      auto-rotate
+      shadow-intensity="1"
+      max-camera-orbit="auto 88deg auto"
+    >
+      <button slot="ar-button" class="ar-button">
+        📱 View in Your Room (AR)
+      </button>
+    </model-viewer>
 
-  <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body, html { width: 100%; height: 100%; overflow: hidden; background-color: #f5f5f7; font-family: sans-serif; }
-    #ar-viewer { width: 100vw; height: 100vh; }
-    .top-bar { position: absolute; top: 20px; left: 20px; z-index: 10; }
-    .back-btn { display: inline-flex; padding: 10px 18px; background: rgba(255,255,255,0.9); border-radius: 30px; text-decoration: none; color: #111; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
-    .ar-button { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: #ffd814; color: #111; border: 1px solid #fcd200; padding: 14px 28px; border-radius: 30px; font-weight: 700; cursor: pointer; z-index: 10; white-space: nowrap; }
-  </style>
-</head>
-<body>
-
-  <div class="top-bar">
-    <a href="/" class="back-btn">← Back to Store</a>
-  </div>
-
-  <model-viewer
-    id="ar-viewer"
-    alt="3D Sofa Model"
-    ar
-    ar-modes="webxr scene-viewer quick-look"
-    camera-controls
-    disable-pan
-    camera-target="auto auto auto"
-    min-camera-orbit="auto 10deg auto"
-    max-camera-orbit="auto 88deg auto"
-    shadow-intensity="1.2"
-    bounds="tight">
-
-    <button slot="ar-button" class="ar-button">
-      📱 View in your Room (AR)
-    </button>
-  </model-viewer>
-
-  <script>
-    document.addEventListener('DOMContentLoaded', () => {
-      const modelViewer = document.querySelector('#ar-viewer');
+    <script>
       const params = new URLSearchParams(window.location.search);
-
-      const modelPath = params.get('model');
-      const texturePath = params.get('color') || params.get('texture');
-
-      if (modelPath) {
-        // Ensure absolute URL resolution
-        const fullModelUrl = new URL(modelPath, window.location.origin).href;
-        modelViewer.src = fullModelUrl;
+      const modelUrl = params.get('model');
+      
+      if (modelUrl) {
+        const viewer = document.getElementById('ar-viewer');
+        viewer.src = modelUrl;
       }
-
-      if (texturePath) {
-        modelViewer.addEventListener('load', async () => {
-          try {
-            const fullTextureUrl = new URL(texturePath, window.location.origin).href;
-            const texture = await modelViewer.createTexture(fullTextureUrl);
-            const material = modelViewer.model?.materials[0];
-            
-            if (material && material.pbrMetallicRoughness) {
-              material.pbrMetallicRoughness.baseColorTexture.setTexture(texture);
-            }
-          } catch (err) {
-            console.error('Texture load error:', err);
-          }
-        }, { once: true });
-      }
-    });
-  </script>
-</body>
+    </script>
+  </body>
 </html>
