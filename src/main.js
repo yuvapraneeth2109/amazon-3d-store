@@ -9,11 +9,10 @@ const products = [
     name: 'Modern Velvet Sofa',
     price: '$299.99',
     modelPath: '/models/model1.glb',
-    currentColor: '#ffffff',
+    currentColorKey: 'red',
     colors: [
-      { name: 'Original', hex: '#ffffff' },
-      { name: 'Navy Blue', hex: '#2b4162' },
-      { name: 'Burgundy', hex: '#631d22' }
+      { name: 'Red Fabric', key: 'red', hex: '#7a1f1d' },
+      { name: 'Blue Fabric', key: 'blue', hex: '#213348' }
     ]
   },
   {
@@ -21,11 +20,10 @@ const products = [
     name: 'Nordic Accent Sofa',
     price: '$389.99',
     modelPath: '/models/model2.glb',
-    currentColor: '#ffffff',
+    currentColorKey: 'red',
     colors: [
-      { name: 'Original', hex: '#ffffff' },
-      { name: 'Navy Blue', hex: '#2b4162' },
-      { name: 'Burgundy', hex: '#631d22' }
+      { name: 'Red Fabric', key: 'red', hex: '#7a1f1d' },
+      { name: 'Blue Fabric', key: 'blue', hex: '#213348' }
     ]
   },
   {
@@ -33,11 +31,10 @@ const products = [
     name: 'Minimalist Lounge Sofa',
     price: '$420.00',
     modelPath: '/models/model3.glb',
-    currentColor: '#ffffff',
+    currentColorKey: 'red',
     colors: [
-      { name: 'Original', hex: '#ffffff' },
-      { name: 'Navy Blue', hex: '#2b4162' },
-      { name: 'Charcoal', hex: '#333333' }
+      { name: 'Red Fabric', key: 'red', hex: '#7a1f1d' },
+      { name: 'Blue Fabric', key: 'blue', hex: '#213348' }
     ]
   },
   {
@@ -45,11 +42,10 @@ const products = [
     name: 'Executive Recliner Sofa',
     price: '$549.99',
     modelPath: '/models/model4.glb',
-    currentColor: '#ffffff',
+    currentColorKey: 'red',
     colors: [
-      { name: 'Original', hex: '#ffffff' },
-      { name: 'Forest Green', hex: '#1c3b2b' },
-      { name: 'Navy Blue', hex: '#2b4162' }
+      { name: 'Red Fabric', key: 'red', hex: '#7a1f1d' },
+      { name: 'Blue Fabric', key: 'blue', hex: '#213348' }
     ]
   },
   {
@@ -57,16 +53,52 @@ const products = [
     name: 'Luxury Sectional Sofa',
     price: '$699.99',
     modelPath: '/models/model5.glb',
-    currentColor: '#ffffff',
+    currentColorKey: 'red',
     colors: [
-      { name: 'Original', hex: '#ffffff' },
-      { name: 'Charcoal', hex: '#333333' },
-      { name: 'Cream', hex: '#d1c7bd' }
+      { name: 'Red Fabric', key: 'red', hex: '#7a1f1d' },
+      { name: 'Blue Fabric', key: 'blue', hex: '#213348' }
     ]
   }
 ];
 
 const gltfLoader = new GLTFLoader();
+const textureLoader = new THREE.TextureLoader();
+
+function applyTextureSet(loadedMesh, colorKey) {
+  if (!loadedMesh) return;
+
+  loadedMesh.traverse((child) => {
+    if (child.isMesh && child.material) {
+      const matName = child.material.name || '';
+      
+      // Match material key (Fabric_Mat_A through Fabric_Mat_G)
+      const matMatch = matName.match(/Fabric_Mat_[A-G]/i);
+      const targetMatName = matMatch ? matMatch[0] : 'Fabric_Mat_A';
+
+      const basePath = `/textures/${colorKey}/${targetMatName}`;
+
+      const baseColorTex = textureLoader.load(`${basePath}_BaseColor.jpg`);
+      baseColorTex.colorSpace = THREE.SRGBColorSpace;
+      baseColorTex.flipY = false;
+
+      const metallicTex = textureLoader.load(`${basePath}_Metallic.jpg`);
+      metallicTex.flipY = false;
+
+      const normalTex = textureLoader.load(`${basePath}_Normal.jpg`);
+      normalTex.flipY = false;
+
+      const roughnessTex = textureLoader.load(`${basePath}_Roughness.jpg`);
+      roughnessTex.flipY = false;
+
+      child.material.map = baseColorTex;
+      child.material.metalnessMap = metallicTex;
+      child.material.normalMap = normalTex;
+      child.material.roughnessMap = roughnessTex;
+      child.material.color.set('#ffffff'); // Neutralize tint so texture colors render naturally
+      child.material.needsUpdate = true;
+    }
+  });
+}
 
 function init() {
   const app = document.getElementById('app');
@@ -102,7 +134,7 @@ function init() {
         <h3>${product.name}</h3>
         <p class="price">${product.price}</p>
         <div class="color-selector">
-          <span>Select Color</span>
+          <span>Select Texture</span>
           <div class="swatches" id="swatches-${product.id}"></div>
         </div>
         <button class="ar-btn" id="ar-btn-${product.id}">
@@ -138,11 +170,11 @@ function initCard3DScene(product) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
 
-  // Restricts camera from moving under ground level
+  // Restricts vertical camera movement under ground level
   controls.maxPolarAngle = Math.PI / 2 - 0.05;
   controls.minPolarAngle = 0.1;
 
-  // Lighting
+  // Lighting Setup
   const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
   scene.add(ambientLight);
 
@@ -152,7 +184,6 @@ function initCard3DScene(product) {
 
   let loadedMesh = null;
 
-  // Load GLB model
   gltfLoader.load(
     product.modelPath,
     (gltf) => {
@@ -173,44 +204,40 @@ function initCard3DScene(product) {
       camera.lookAt(0, 0, 0);
       controls.target.set(0, 0, 0);
       controls.update();
+
+      // Apply initial texture set (Red by default)
+      applyTextureSet(loadedMesh, product.currentColorKey);
     },
     undefined,
     (err) => console.error(`Failed to load ${product.modelPath}:`, err)
   );
 
-  // Color Swatch handling
+  // Swatches for Red / Blue texture sets
   const swatchesContainer = document.getElementById(`swatches-${product.id}`);
   if (swatchesContainer) {
     product.colors.forEach((color, index) => {
       const swatch = document.createElement('button');
       swatch.className = `swatch ${index === 0 ? 'active' : ''}`;
       swatch.style.backgroundColor = color.hex;
+      swatch.title = color.name;
 
       swatch.addEventListener('click', () => {
         swatchesContainer.querySelectorAll('.swatch').forEach((s) => s.classList.remove('active'));
         swatch.classList.add('active');
 
-        // Update active color tracking on the product
-        product.currentColor = color.hex;
-
-        if (loadedMesh) {
-          loadedMesh.traverse((child) => {
-            if (child.isMesh && child.material) {
-              child.material.color.set(color.hex);
-            }
-          });
-        }
+        product.currentColorKey = color.key;
+        applyTextureSet(loadedMesh, color.key);
       });
 
       swatchesContainer.appendChild(swatch);
     });
   }
 
-  // Open AR Modal trigger
+  // AR Modal setup
   const arBtn = document.getElementById(`ar-btn-${product.id}`);
   if (arBtn) {
     arBtn.addEventListener('click', () => {
-      openARModal(product.modelPath, product.currentColor);
+      openARModal(product.modelPath, product.currentColorKey);
     });
   }
 
@@ -222,7 +249,7 @@ function initCard3DScene(product) {
   animate();
 }
 
-function openARModal(modelRelativePath, selectedColorHex) {
+function openARModal(modelRelativePath, selectedColorKey) {
   const modal = document.getElementById('ar-modal');
   const qrImg = document.getElementById('qr-image');
 
@@ -230,9 +257,8 @@ function openARModal(modelRelativePath, selectedColorHex) {
   const arPageUrl = new URL('/ar.html', window.location.origin);
   arPageUrl.searchParams.set('model', absoluteModelUrl);
 
-  // Pass active color hex to AR page
-  if (selectedColorHex) {
-    arPageUrl.searchParams.set('color', selectedColorHex);
+  if (selectedColorKey) {
+    arPageUrl.searchParams.set('texture', selectedColorKey);
   }
 
   const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
