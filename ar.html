@@ -5,102 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>AR Preview - Amazon 3D Store</title>
   
-  <!-- Google <model-viewer> web component library -->
   <script type="module" src="https://ajax.googleapis.com/ajax/libs/model-viewer/3.4.0/model-viewer.min.js"></script>
 
   <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
-
-    body, html {
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      background-color: #f5f5f7;
-    }
-
-    #ar-viewer {
-      width: 100%;
-      height: 100%;
-      --poster-color: transparent;
-    }
-
-    /* Top Back Button Overlay */
-    .top-bar {
-      position: absolute;
-      top: 20px;
-      left: 20px;
-      z-index: 10;
-    }
-
-    .back-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 18px;
-      background: rgba(255, 255, 255, 0.9);
-      backdrop-filter: blur(10px);
-      -webkit-backdrop-filter: blur(10px);
-      border: 1px solid rgba(0, 0, 0, 0.1);
-      border-radius: 30px;
-      color: #111;
-      font-size: 14px;
-      font-weight: 600;
-      text-decoration: none;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-      transition: transform 0.2s ease, background-color 0.2s ease;
-    }
-
-    .back-btn:active {
-      transform: scale(0.95);
-    }
-
-    /* Custom AR Launch Button */
-    .ar-button {
-      position: absolute;
-      bottom: 30px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #ffd814;
-      color: #111;
-      border: 1px solid #fcd200;
-      padding: 14px 28px;
-      border-radius: 30px;
-      font-size: 16px;
-      font-weight: 700;
-      cursor: pointer;
-      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.15);
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      z-index: 10;
-      transition: transform 0.2s ease, background-color 0.2s ease;
-      white-space: nowrap;
-    }
-
-    .ar-button:hover {
-      background-color: #f7ca00;
-    }
-
-    .ar-button:active {
-      transform: translateX(-50%) scale(0.95);
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body, html { width: 100%; height: 100%; overflow: hidden; background-color: #f5f5f7; font-family: sans-serif; }
+    #ar-viewer { width: 100vw; height: 100vh; }
+    .top-bar { position: absolute; top: 20px; left: 20px; z-index: 10; }
+    .back-btn { display: inline-flex; padding: 10px 18px; background: rgba(255,255,255,0.9); border-radius: 30px; text-decoration: none; color: #111; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+    .ar-button { position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); background: #ffd814; color: #111; border: 1px solid #fcd200; padding: 14px 28px; border-radius: 30px; font-weight: 700; cursor: pointer; z-index: 10; white-space: nowrap; }
   </style>
 </head>
 <body>
 
-  <!-- Top Navigation -->
   <div class="top-bar">
-    <a href="/" class="back-btn">
-      ← Back to Store
-    </a>
+    <a href="/" class="back-btn">← Back to Store</a>
   </div>
 
-  <!-- Model Viewer Component -->
   <model-viewer
     id="ar-viewer"
     alt="3D Sofa Model"
@@ -108,46 +29,43 @@
     ar-modes="webxr scene-viewer quick-look"
     camera-controls
     disable-pan
-    camera-target="auto center center center"
+    camera-target="auto auto auto"
     min-camera-orbit="auto 10deg auto"
     max-camera-orbit="auto 88deg auto"
     shadow-intensity="1.2"
-    shadow-softness="0.8"
-    touch-action="pan-y">
+    bounds="tight">
 
-    <!-- Native AR Launcher Slot -->
     <button slot="ar-button" class="ar-button">
       📱 View in your Room (AR)
     </button>
-
   </model-viewer>
 
   <script>
-    document.addEventListener('DOMContentLoaded', async () => {
+    document.addEventListener('DOMContentLoaded', () => {
       const modelViewer = document.querySelector('#ar-viewer');
       const params = new URLSearchParams(window.location.search);
 
-      // Extract query parameters passed from main page
       const modelPath = params.get('model');
       const texturePath = params.get('color') || params.get('texture');
 
-      // Set 3D model source
       if (modelPath) {
-        modelViewer.src = modelPath;
+        // Ensure absolute URL resolution
+        const fullModelUrl = new URL(modelPath, window.location.origin).href;
+        modelViewer.src = fullModelUrl;
       }
 
-      // Dynamically apply selected texture once 3D model loads
       if (texturePath) {
         modelViewer.addEventListener('load', async () => {
           try {
-            const texture = await modelViewer.createTexture(texturePath);
+            const fullTextureUrl = new URL(texturePath, window.location.origin).href;
+            const texture = await modelViewer.createTexture(fullTextureUrl);
             const material = modelViewer.model?.materials[0];
             
             if (material && material.pbrMetallicRoughness) {
               material.pbrMetallicRoughness.baseColorTexture.setTexture(texture);
             }
           } catch (err) {
-            console.error('Failed to apply selected color texture in AR mode:', err);
+            console.error('Texture load error:', err);
           }
         }, { once: true });
       }
