@@ -63,10 +63,38 @@
     <script>
       const params = new URLSearchParams(window.location.search);
       const modelUrl = params.get('model');
-      
+      const colorHex = params.get('color');
+
+      const viewer = document.getElementById('ar-viewer');
+
+      // Convert Hex (#ffffff) to normalized RGBA array [r, g, b, a] for model-viewer
+      function hexToRgba(hex) {
+        let cleanHex = hex.replace('#', '');
+        if (cleanHex.length === 3) {
+          cleanHex = cleanHex.split('').map((c) => c + c).join('');
+        }
+        const r = parseInt(cleanHex.substring(0, 2), 16) / 255;
+        const g = parseInt(cleanHex.substring(2, 4), 16) / 255;
+        const b = parseInt(cleanHex.substring(4, 6), 16) / 255;
+        return [r, g, b, 1.0];
+      }
+
       if (modelUrl) {
-        const viewer = document.getElementById('ar-viewer');
         viewer.src = modelUrl;
+
+        // Apply color dynamically when model loads in model-viewer
+        if (colorHex) {
+          viewer.addEventListener('load', () => {
+            const rgba = hexToRgba(colorHex);
+            if (viewer.model && viewer.model.materials) {
+              viewer.model.materials.forEach((material) => {
+                if (material.pbrMetallicRoughness) {
+                  material.pbrMetallicRoughness.setBaseColorFactor(rgba);
+                }
+              });
+            }
+          });
+        }
       }
     </script>
   </body>

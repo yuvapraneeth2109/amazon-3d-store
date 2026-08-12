@@ -9,6 +9,7 @@ const products = [
     name: 'Modern Velvet Sofa',
     price: '$299.99',
     modelPath: '/models/model1.glb',
+    currentColor: '#ffffff',
     colors: [
       { name: 'Original', hex: '#ffffff' },
       { name: 'Navy Blue', hex: '#2b4162' },
@@ -20,6 +21,7 @@ const products = [
     name: 'Nordic Accent Sofa',
     price: '$389.99',
     modelPath: '/models/model2.glb',
+    currentColor: '#ffffff',
     colors: [
       { name: 'Original', hex: '#ffffff' },
       { name: 'Navy Blue', hex: '#2b4162' },
@@ -31,6 +33,7 @@ const products = [
     name: 'Minimalist Lounge Sofa',
     price: '$420.00',
     modelPath: '/models/model3.glb',
+    currentColor: '#ffffff',
     colors: [
       { name: 'Original', hex: '#ffffff' },
       { name: 'Navy Blue', hex: '#2b4162' },
@@ -42,6 +45,7 @@ const products = [
     name: 'Executive Recliner Sofa',
     price: '$549.99',
     modelPath: '/models/model4.glb',
+    currentColor: '#ffffff',
     colors: [
       { name: 'Original', hex: '#ffffff' },
       { name: 'Forest Green', hex: '#1c3b2b' },
@@ -53,6 +57,7 @@ const products = [
     name: 'Luxury Sectional Sofa',
     price: '$699.99',
     modelPath: '/models/model5.glb',
+    currentColor: '#ffffff',
     colors: [
       { name: 'Original', hex: '#ffffff' },
       { name: 'Charcoal', hex: '#333333' },
@@ -133,11 +138,11 @@ function initCard3DScene(product) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
 
-  // Restricts vertical rotation so users cannot look under the model ground level
+  // Restricts camera from moving under ground level
   controls.maxPolarAngle = Math.PI / 2 - 0.05;
   controls.minPolarAngle = 0.1;
 
-  // Lighting Setup
+  // Lighting
   const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
   scene.add(ambientLight);
 
@@ -147,13 +152,12 @@ function initCard3DScene(product) {
 
   let loadedMesh = null;
 
-  // Load GLB model from public/models/
+  // Load GLB model
   gltfLoader.load(
     product.modelPath,
     (gltf) => {
       loadedMesh = gltf.scene;
 
-      // Center model & dynamically scale camera distance based on bounding box
       const box = new THREE.Box3().setFromObject(loadedMesh);
       const center = box.getCenter(new THREE.Vector3());
       const size = box.getSize(new THREE.Vector3());
@@ -171,10 +175,10 @@ function initCard3DScene(product) {
       controls.update();
     },
     undefined,
-    (err) => console.error(`Failed to load ${product.modelPath}: Check if file exists in public/models/`, err)
+    (err) => console.error(`Failed to load ${product.modelPath}:`, err)
   );
 
-  // Swatch logic
+  // Color Swatch handling
   const swatchesContainer = document.getElementById(`swatches-${product.id}`);
   if (swatchesContainer) {
     product.colors.forEach((color, index) => {
@@ -185,6 +189,9 @@ function initCard3DScene(product) {
       swatch.addEventListener('click', () => {
         swatchesContainer.querySelectorAll('.swatch').forEach((s) => s.classList.remove('active'));
         swatch.classList.add('active');
+
+        // Update active color tracking on the product
+        product.currentColor = color.hex;
 
         if (loadedMesh) {
           loadedMesh.traverse((child) => {
@@ -202,7 +209,9 @@ function initCard3DScene(product) {
   // Open AR Modal trigger
   const arBtn = document.getElementById(`ar-btn-${product.id}`);
   if (arBtn) {
-    arBtn.addEventListener('click', () => openARModal(product.modelPath));
+    arBtn.addEventListener('click', () => {
+      openARModal(product.modelPath, product.currentColor);
+    });
   }
 
   function animate() {
@@ -213,14 +222,18 @@ function initCard3DScene(product) {
   animate();
 }
 
-function openARModal(modelRelativePath) {
+function openARModal(modelRelativePath, selectedColorHex) {
   const modal = document.getElementById('ar-modal');
   const qrImg = document.getElementById('qr-image');
 
-  // Convert relative model path to absolute HTTPS URL for mobile access
   const absoluteModelUrl = new URL(modelRelativePath, window.location.origin).href;
   const arPageUrl = new URL('/ar.html', window.location.origin);
   arPageUrl.searchParams.set('model', absoluteModelUrl);
+
+  // Pass active color hex to AR page
+  if (selectedColorHex) {
+    arPageUrl.searchParams.set('color', selectedColorHex);
+  }
 
   const qrApiUrl = `https://api.qrserver.com/v1/create-qr-code/?size=240x240&data=${encodeURIComponent(
     arPageUrl.toString()
