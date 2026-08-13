@@ -173,7 +173,7 @@
         }
       });
 
-      // Inject custom soft fill lights on the right/rear-right side
+      // Inject custom soft fill lights on the North-East side
       function addRightFillLight(viewerInstance) {
         const symbols = Object.getOwnPropertySymbols(viewerInstance);
         const sceneSymbol = symbols.find(
@@ -184,7 +184,8 @@
           const scene = viewerInstance[sceneSymbol];
 
           if (!scene.getObjectByName('RightFillLight')) {
-            const fillLight = new THREE.DirectionalLight(0xfff4e5, 1.2);
+            // Directional light on North-East reduced from 1.2 to 0.3
+            const fillLight = new THREE.DirectionalLight(0xfff4e5, 0.3);
             fillLight.name = 'RightFillLight';
             fillLight.position.set(2.5, 1.5, -2.0);
             scene.add(fillLight);

@@ -382,7 +382,7 @@
       const closeModalBtn = document.getElementById('close-modal');
       const qrContainer = document.getElementById('qrcode');
 
-      // Function to inject custom soft fill lights on the right/rear-right side
+      // Function to inject custom soft fill lights on the North-East side
       function addRightFillLight(viewer) {
         const symbols = Object.getOwnPropertySymbols(viewer);
         const sceneSymbol = symbols.find(
@@ -393,13 +393,13 @@
           const scene = viewer[sceneSymbol];
 
           if (!scene.getObjectByName('RightFillLight')) {
-            // Directional light on the right/back-right
-            const fillLight = new THREE.DirectionalLight(0xfff4e5, 1.2);
+            // Directional light on North-East reduced from 1.2 to 0.3
+            const fillLight = new THREE.DirectionalLight(0xfff4e5, 0.3);
             fillLight.name = 'RightFillLight';
             fillLight.position.set(2.5, 1.5, -2.0);
             scene.add(fillLight);
 
-            // General ambient light boost to eliminate pure pitch-black shadows
+            // General ambient light fill
             const ambientFill = new THREE.AmbientLight(0xffffff, 0.4);
             ambientFill.name = 'RightAmbientFill';
             scene.add(ambientFill);

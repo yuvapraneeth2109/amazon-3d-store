@@ -71,7 +71,6 @@ function applyTextureSet(loadedMesh, colorKey) {
     if (child.isMesh && child.material) {
       const matName = child.material.name || '';
       
-      // Match material key (Fabric_Mat_A through Fabric_Mat_G)
       const matMatch = matName.match(/Fabric_Mat_[A-G]/i);
       const targetMatName = matMatch ? matMatch[0] : 'Fabric_Mat_A';
 
@@ -94,7 +93,7 @@ function applyTextureSet(loadedMesh, colorKey) {
       child.material.metalnessMap = metallicTex;
       child.material.normalMap = normalTex;
       child.material.roughnessMap = roughnessTex;
-      child.material.color.set('#ffffff'); // Neutralize tint so texture colors render naturally
+      child.material.color.set('#ffffff');
       child.material.needsUpdate = true;
     }
   });
@@ -170,7 +169,6 @@ function initCard3DScene(product) {
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
 
-  // Restricts vertical camera movement under ground level
   controls.maxPolarAngle = Math.PI / 2 - 0.05;
   controls.minPolarAngle = 0.1;
 
@@ -178,7 +176,8 @@ function initCard3DScene(product) {
   const ambientLight = new THREE.AmbientLight(0xffffff, 2.0);
   scene.add(ambientLight);
 
-  const dirLight = new THREE.DirectionalLight(0xffffff, 2.5);
+  // Reduced North-East directional light intensity from 2.5 to 0.8
+  const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
   dirLight.position.set(5, 10, 7);
   scene.add(dirLight);
 
@@ -205,14 +204,12 @@ function initCard3DScene(product) {
       controls.target.set(0, 0, 0);
       controls.update();
 
-      // Apply initial texture set (Red by default)
       applyTextureSet(loadedMesh, product.currentColorKey);
     },
     undefined,
     (err) => console.error(`Failed to load ${product.modelPath}:`, err)
   );
 
-  // Swatches for Red / Blue texture sets
   const swatchesContainer = document.getElementById(`swatches-${product.id}`);
   if (swatchesContainer) {
     product.colors.forEach((color, index) => {
@@ -233,7 +230,6 @@ function initCard3DScene(product) {
     });
   }
 
-  // AR Modal setup
   const arBtn = document.getElementById(`ar-btn-${product.id}`);
   if (arBtn) {
     arBtn.addEventListener('click', () => {
