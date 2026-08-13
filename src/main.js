@@ -64,13 +64,23 @@ const products = [
 const gltfLoader = new GLTFLoader();
 const textureLoader = new THREE.TextureLoader();
 
+// Some fabric colors (like navy) photograph much darker than others once lit,
+// even with identical scene lighting — this is a property of the texture
+// itself, not the lights. This multiplier brightens the BaseColor texture
+// per swatch before lighting so dark colors don't render near-black.
+// Tune these values (1.0 = no change) if a color still looks off.
+const COLOR_BRIGHTNESS = {
+  red: 1.0,
+  blue: 2.6
+};
+
 function applyTextureSet(loadedMesh, colorKey) {
   if (!loadedMesh) return;
 
   loadedMesh.traverse((child) => {
     if (child.isMesh && child.material) {
       const matName = child.material.name || '';
-      
+
       const matMatch = matName.match(/Fabric_Mat_[A-G]/i);
       const targetMatName = matMatch ? matMatch[0] : 'Fabric_Mat_A';
 
@@ -93,7 +103,10 @@ function applyTextureSet(loadedMesh, colorKey) {
       child.material.metalnessMap = metallicTex;
       child.material.normalMap = normalTex;
       child.material.roughnessMap = roughnessTex;
-      child.material.color.set('#ffffff');
+
+      const brightness = COLOR_BRIGHTNESS[colorKey] ?? 1.0;
+      child.material.color.setScalar(brightness);
+
       child.material.needsUpdate = true;
     }
   });

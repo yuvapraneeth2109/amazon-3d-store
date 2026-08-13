@@ -407,8 +407,21 @@
         }
       }
 
+      // Some fabric colors (like navy) photograph much darker than others
+      // once lit, even under identical scene lighting — a property of the
+      // texture itself, not the lights. This multiplier brightens the
+      // BaseColor texture per swatch via baseColorFactor before lighting is
+      // applied, so dark colors don't render near-black. Tune these values
+      // (1.0 = no change) if a color still looks off.
+      const COLOR_BRIGHTNESS = {
+        red: 1.0,
+        blue: 2.6
+      };
+
       async function applyTexturesToViewer(viewer, textureKey) {
         if (!viewer.model || !viewer.model.materials) return;
+
+        const brightness = COLOR_BRIGHTNESS[textureKey] ?? 1.0;
 
         for (const material of viewer.model.materials) {
           const matName = material.name || '';
@@ -417,7 +430,7 @@
           const basePath = `/textures/${textureKey}/${targetMatName}`;
 
           if (material.pbrMetallicRoughness) {
-            material.pbrMetallicRoughness.setBaseColorFactor([1, 1, 1, 1]);
+            material.pbrMetallicRoughness.setBaseColorFactor([brightness, brightness, brightness, 1]);
           }
 
           if (material.occlusionTexture) {
