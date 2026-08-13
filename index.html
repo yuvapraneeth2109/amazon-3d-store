@@ -360,6 +360,32 @@
           <button class="btn btn-ar">🕶️ View in VR / AR</button>
         </div>
       </div>
+
+      <!-- Card 6 -->
+      <div class="card" data-model="/models/model6.glb">
+        <div class="viewer-container">
+          <model-viewer
+            src="/models/model6.glb"
+            camera-controls
+            touch-action="pan-y"
+            auto-rotate
+            shadow-intensity="0.1"
+            shadow-softness="1"
+            exposure="1.8"
+            max-camera-orbit="auto 85deg auto"
+            min-camera-orbit="auto auto 1.5m"
+            min-field-of-view="35deg"
+            environment-image="/HDR_Avataar_engine.hdr"
+          ></model-viewer>
+        </div>
+        <h2 class="title">New Sofa (Model 6)</h2>
+        <div class="price">$0.00</div>
+        <!-- No color swatches: this model keeps its own baked-in materials -->
+        <div class="action-buttons">
+          <button class="btn btn-3d">View in 3D</button>
+          <button class="btn btn-ar">🕶️ View in VR / AR</button>
+        </div>
+      </div>
     </div>
 
     <!-- QR Code Modal -->
@@ -461,6 +487,7 @@
       document.querySelectorAll('.card').forEach(card => {
         const viewer = card.querySelector('model-viewer');
         const swatches = card.querySelectorAll('.swatch');
+        const hasColors = swatches.length > 0;
         const btn3d = card.querySelector('.btn-3d');
         const btnAr = card.querySelector('.btn-ar');
         const modelUrl = card.getAttribute('data-model');
@@ -479,7 +506,12 @@
         });
 
         viewer.addEventListener('load', () => {
-          applyTexturesToViewer(viewer, selectedTexture);
+          // Only swap in our color textures for cards that have swatches.
+          // Cards without them (e.g. product 6) keep their own baked-in
+          // materials untouched — only the fill light gets added.
+          if (hasColors) {
+            applyTexturesToViewer(viewer, selectedTexture);
+          }
           addRightFillLight(viewer);
         });
 
@@ -493,12 +525,14 @@
         });
 
         btn3d.addEventListener('click', () => {
-          window.location.href = `ar.html?model=${encodeURIComponent(modelUrl)}&texture=${selectedTexture}`;
+          const textureParam = hasColors ? `&texture=${selectedTexture}` : '';
+          window.location.href = `ar.html?model=${encodeURIComponent(modelUrl)}${textureParam}`;
         });
 
         btnAr.addEventListener('click', () => {
           const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-          const fullArUrl = `${window.location.origin}/ar.html?model=${encodeURIComponent(modelUrl)}&texture=${selectedTexture}`;
+          const textureParam = hasColors ? `&texture=${selectedTexture}` : '';
+          const fullArUrl = `${window.location.origin}/ar.html?model=${encodeURIComponent(modelUrl)}${textureParam}`;
 
           if (isMobile) {
             window.location.href = fullArUrl;

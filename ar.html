@@ -163,9 +163,16 @@
       // Parse URL Parameters
       const urlParams = new URLSearchParams(window.location.search);
       const modelUrl = urlParams.get('model') || '/models/model1.glb';
+      const hasColors = urlParams.has('texture');
       let currentTexture = urlParams.get('texture') || 'red';
 
       viewer.setAttribute('src', modelUrl);
+
+      if (!hasColors) {
+        // This model (e.g. product 6) has no color variants — hide the
+        // swatch UI entirely and keep its own baked-in materials untouched.
+        document.querySelector('.swatches').style.display = 'none';
+      }
 
       swatches.forEach(swatch => {
         if (swatch.getAttribute('data-texture') === currentTexture) {
@@ -261,7 +268,9 @@
       });
 
       viewer.addEventListener('load', () => {
-        applyTexturesToViewer(viewer, currentTexture);
+        if (hasColors) {
+          applyTexturesToViewer(viewer, currentTexture);
+        }
         addRightFillLight(viewer);
       });
 

@@ -58,6 +58,14 @@ const products = [
       { name: 'Red Fabric', key: 'red', hex: '#7a1f1d' },
       { name: 'Blue Fabric', key: 'blue', hex: '#213348' }
     ]
+  },
+  {
+    id: 'product-6',
+    name: 'New Sofa', // TODO: update name
+    price: '$0.00', // TODO: update price
+    modelPath: '/models/model6.glb'
+    // No `colors` / `currentColorKey` — this product keeps its own
+    // baked-in materials as-is; no swatch UI, no texture swapping.
   }
 ];
 
@@ -138,6 +146,8 @@ function init() {
   const grid = document.getElementById('product-grid');
 
   products.forEach((product) => {
+    const hasColors = Array.isArray(product.colors) && product.colors.length > 0;
+
     const card = document.createElement('div');
     card.className = 'product-card';
     card.innerHTML = `
@@ -145,10 +155,14 @@ function init() {
       <div class="product-info">
         <h3>${product.name}</h3>
         <p class="price">${product.price}</p>
-        <div class="color-selector">
-          <span>Select Texture</span>
-          <div class="swatches" id="swatches-${product.id}"></div>
-        </div>
+        ${
+          hasColors
+            ? `<div class="color-selector">
+                 <span>Select Texture</span>
+                 <div class="swatches" id="swatches-${product.id}"></div>
+               </div>`
+            : ''
+        }
         <button class="ar-btn" id="ar-btn-${product.id}">
           👓 View in VR / AR
         </button>
@@ -217,7 +231,12 @@ function initCard3DScene(product) {
       controls.target.set(0, 0, 0);
       controls.update();
 
-      applyTextureSet(loadedMesh, product.currentColorKey);
+      // Only swap in our color textures for products that define `colors`.
+      // Products without it (e.g. product 6) keep whatever materials/
+      // textures are already baked into their .glb file, untouched.
+      if (Array.isArray(product.colors) && product.colors.length > 0) {
+        applyTextureSet(loadedMesh, product.currentColorKey);
+      }
     },
     undefined,
     (err) => console.error(`Failed to load ${product.modelPath}:`, err)
