@@ -11,6 +11,8 @@
     ></script>
     <!-- Three.js CDN for Custom Light Injection -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <!-- QRCode CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
     <style>
       * {
         margin: 0;
@@ -117,12 +119,112 @@
       .ar-btn-custom:hover {
         background: #2c2c2e;
       }
+
+      .safari-banner {
+        display: none;
+        position: absolute;
+        top: 80px;
+        left: 20px;
+        right: 20px;
+        z-index: 10;
+        background: rgba(255, 244, 229, 0.97);
+        backdrop-filter: blur(10px);
+        border-radius: 16px;
+        padding: 14px 18px;
+        font-size: 13px;
+        line-height: 1.4;
+        color: #1d1d1f;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+      .safari-banner.visible {
+        display: block;
+      }
+      .safari-banner a {
+        color: #0071e3;
+        font-weight: 600;
+        text-decoration: none;
+      }
+
+      .modal-overlay {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        backdrop-filter: blur(8px);
+        z-index: 1000;
+        justify-content: center;
+        align-items: center;
+      }
+      .modal-overlay.active {
+        display: flex;
+      }
+      .modal-card {
+        background: #ffffff;
+        border-radius: 24px;
+        padding: 32px;
+        max-width: 360px;
+        width: 90%;
+        text-align: center;
+        position: relative;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.2);
+        animation: popIn 0.25s ease-out;
+      }
+      @keyframes popIn {
+        from { transform: scale(0.9); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+      }
+      .close-btn {
+        position: absolute;
+        top: 16px;
+        right: 20px;
+        font-size: 24px;
+        font-weight: bold;
+        color: #86868b;
+        cursor: pointer;
+        background: none;
+        border: none;
+      }
+      .close-btn:hover {
+        color: #1d1d1f;
+      }
+      .modal-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: #1d1d1f;
+        margin-bottom: 8px;
+      }
+      .modal-subtitle {
+        font-size: 13px;
+        color: #86868b;
+        margin-bottom: 24px;
+        line-height: 1.4;
+      }
+      .qr-container {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 16px;
+        background: #f5f5f7;
+        border-radius: 16px;
+        margin-bottom: 16px;
+      }
+      .qr-container img {
+        margin: 0 auto;
+      }
     </style>
   </head>
   <body>
     <div class="viewer-wrapper">
       <div class="top-bar">
         <button class="btn-back" id="back-btn">← Back to Catalog</button>
+      </div>
+
+      <div class="safari-banner" id="safari-banner">
+        AR on iPhone only works in Safari — Apple doesn't allow other browsers
+        to launch it. <a href="#" id="open-in-safari">Tap here to open in Safari</a>.
       </div>
 
       <model-viewer
@@ -151,6 +253,18 @@
       </div>
     </div>
 
+    <!-- QR Code Modal (fallback when native AR isn't available on this device/browser) -->
+    <div id="qr-modal" class="modal-overlay">
+      <div class="modal-card">
+        <button id="close-qr-modal" class="close-btn">&times;</button>
+        <h3 class="modal-title">Scan to View in AR</h3>
+        <p class="modal-subtitle">Scan this QR code with your phone camera to place this model in your room.</p>
+        <div class="qr-container">
+          <div id="qrcode"></div>
+        </div>
+      </div>
+    </div>
+
     <script>
       const MIN_ALLOWED_RADIUS = 1.5;
       const MIN_ALLOWED_FOV = 35;
@@ -159,6 +273,9 @@
       const backBtn = document.getElementById('back-btn');
       const triggerArBtn = document.getElementById('trigger-ar');
       const swatches = document.querySelectorAll('.swatch');
+      const qrModal = document.getElementById('qr-modal');
+      const closeQrModalBtn = document.getElementById('close-qr-modal');
+      const qrContainer = document.getElementById('qrcode');
 
       // Parse URL Parameters
       const urlParams = new URLSearchParams(window.location.search);
@@ -167,6 +284,46 @@
       let currentTexture = urlParams.get('texture') || 'red';
 
       viewer.setAttribute('src', modelUrl);
+
+      // AR Quick Look (iOS) needs an authored .usdz file via ios-src — without
+      // one, model-viewer falls back to auto-generating a USDZ at runtime,
+      // which is known to produce incomplete/partial geometry ("half the
+      // view" type bugs). This assumes a .usdz file with the same base name
+      // as the .glb exists alongside it (e.g. model4.glb -> model4.usdz).
+      // Upload matching .usdz files (e.g. via Apple's free Reality Converter
+      // app, or the usdzconvert CLI) for this to take effect.
+      const iosSrcUrl = modelUrl.replace(/\.glb(?=(\?|$))/i, '.usdz');
+      viewer.setAttribute('ios-src', iosSrcUrl);
+
+      // Apple only allows the AR Quick Look hand-off from Safari — Chrome,
+      // Firefox, etc. on iOS share Safari's rendering engine but are not
+      // permitted to trigger native AR from a webpage. There's no code
+      // workaround for this; the best we can do is tell the person to
+      // reopen the page in Safari.
+      function isIOS() {
+        return (
+          /iP(hone|od|ad)/.test(navigator.platform) ||
+          (navigator.userAgent.includes('Mac') && navigator.maxTouchPoints > 1)
+        );
+      }
+      function isSafari() {
+        const ua = navigator.userAgent;
+        return /^((?!chrome|android|crios|fxios|edgios|opios).)*safari/i.test(ua);
+      }
+
+      if (isIOS() && !isSafari()) {
+        const banner = document.getElementById('safari-banner');
+        banner.classList.add('visible');
+
+        const openInSafariLink = document.getElementById('open-in-safari');
+        openInSafariLink.addEventListener('click', (e) => {
+          e.preventDefault();
+          // Unofficial but widely-used scheme that forces iOS to open the
+          // current URL in Safari from within another app/browser.
+          const forcedSafariUrl = window.location.href.replace(/^https?:\/\//, 'x-safari-https://');
+          window.location.href = forcedSafariUrl;
+        });
+      }
 
       if (!hasColors) {
         // This model (e.g. product 6) has no color variants — hide the
@@ -287,8 +444,25 @@
         if (viewer.canActivateAR) {
           viewer.activateAR();
         } else {
-          alert('AR is not supported on this device or browser.');
+          // This device/browser can't launch AR directly — generate a QR
+          // code for the current AR page so it can be scanned and opened
+          // on a phone that does support it, instead of just alerting.
+          qrContainer.innerHTML = '';
+          new QRCode(qrContainer, {
+            text: window.location.href,
+            width: 200,
+            height: 200,
+            colorDark: "#000000",
+            colorLight: "#ffffff",
+            correctLevel: QRCode.CorrectLevel.H
+          });
+          qrModal.classList.add('active');
         }
+      });
+
+      closeQrModalBtn.addEventListener('click', () => qrModal.classList.remove('active'));
+      qrModal.addEventListener('click', (e) => {
+        if (e.target === qrModal) qrModal.classList.remove('active');
       });
 
       backBtn.addEventListener('click', () => {
