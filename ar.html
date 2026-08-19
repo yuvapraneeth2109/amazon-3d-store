@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>3D & AR View</title>
     <!-- Model Viewer -->
     <script
@@ -28,7 +28,9 @@
       }
       .viewer-wrapper {
         width: 100vw;
-        height: 100vh;
+        height: 100vh; /* fallback for very old browsers */
+        height: 100dvh; /* accounts for mobile Safari's collapsing toolbar */
+        height: calc(var(--app-height, 100dvh)); /* JS-computed, most reliable */
         position: relative;
       }
       model-viewer {
@@ -69,8 +71,8 @@
         background: #ffffff;
       }
       .controls-card {
-        position: absolute;
-        bottom: 30px;
+        position: fixed;
+        bottom: calc(20px + env(safe-area-inset-bottom));
         left: 50%;
         transform: translateX(-50%);
         background: rgba(255, 255, 255, 0.9);
@@ -82,6 +84,7 @@
         gap: 20px;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
         z-index: 10;
+        max-width: calc(100vw - 40px);
       }
       .swatches {
         display: flex;
@@ -266,6 +269,18 @@
     </div>
 
     <script>
+      // Mobile Safari's 100dvh support is inconsistent across iOS versions
+      // and can miscalculate while the toolbar is animating in/out. Setting
+      // an actual pixel height from window.innerHeight — recalculated live
+      // — is the most reliable fix, so the bottom control bar never ends up
+      // hidden behind Safari's own chrome.
+      function setAppHeight() {
+        document.documentElement.style.setProperty('--app-height', `${window.innerHeight}px`);
+      }
+      setAppHeight();
+      window.addEventListener('resize', setAppHeight);
+      window.addEventListener('orientationchange', setAppHeight);
+
       const MIN_ALLOWED_RADIUS = 1.5;
       const MIN_ALLOWED_FOV = 35;
 
@@ -285,15 +300,16 @@
 
       viewer.setAttribute('src', modelUrl);
 
-      // AR Quick Look (iOS) needs an authored .usdz file via ios-src — without
-      // one, model-viewer falls back to auto-generating a USDZ at runtime,
-      // which is known to produce incomplete/partial geometry ("half the
-      // view" type bugs). This assumes a .usdz file with the same base name
-      // as the .glb exists alongside it (e.g. model4.glb -> model4.usdz).
-      // Upload matching .usdz files (e.g. via Apple's free Reality Converter
-      // app, or the usdzconvert CLI) for this to take effect.
-      const iosSrcUrl = modelUrl.replace(/\.glb(?=(\?|$))/i, '.usdz');
-      viewer.setAttribute('ios-src', iosSrcUrl);
+      // Intentionally NOT setting a static ios-src here. When ios-src is
+      // omitted, iOS Quick Look auto-generates the USDZ from the model's
+      // CURRENT live state at the moment AR is activated — which includes
+      // whatever color texture applyTexturesToViewer() has already applied.
+      // A static ios-src file would always show its own baked-in color,
+      // ignoring the swatch the person picked, so we trade that off in
+      // order to get correct color on iOS AR. (Android's Scene Viewer AR
+      // has no equivalent live-state option — it always loads the raw
+      // `src` file — so it will still show the default color until
+      // per-color baked .glb files are set up.)
 
       // Apple only allows the AR Quick Look hand-off from Safari — Chrome,
       // Firefox, etc. on iOS share Safari's rendering engine but are not
@@ -440,8 +456,14 @@
         });
       });
 
-      triggerArBtn.addEventListener('click', () => {
+      triggerArBtn.addEventListener('click', async () => {
         if (viewer.canActivateAR) {
+          // Re-apply the currently selected color immediately before
+          // activating AR, so Quick Look's live-scene USDZ snapshot is
+          // guaranteed to capture the correct texture (not a stale one).
+          if (hasColors) {
+            await applyTexturesToViewer(viewer, currentTexture);
+          }
           viewer.activateAR();
         } else {
           // This device/browser can't launch AR directly — generate a QR
