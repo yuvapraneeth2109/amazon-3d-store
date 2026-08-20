@@ -123,6 +123,31 @@
         background: #2c2c2e;
       }
 
+      .recline-btn-ar {
+        display: none;
+        align-items: center;
+        gap: 6px;
+        background: #e8e8ed;
+        color: #1d1d1f;
+        border: none;
+        border-radius: 12px;
+        padding: 10px 16px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .recline-btn-ar.visible {
+        display: inline-flex;
+      }
+      .recline-btn-ar:hover {
+        background: #d2d2d7;
+      }
+      .recline-btn-ar:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+
       .safari-banner {
         display: none;
         position: absolute;
@@ -252,6 +277,7 @@
           <div class="swatch swatch-red" data-texture="red"></div>
           <div class="swatch swatch-blue" data-texture="blue"></div>
         </div>
+        <button class="recline-btn-ar" id="recline-btn" type="button">🦶 Open Footrest</button>
         <button class="ar-btn-custom" id="trigger-ar">🕶️ Place in Room (AR)</button>
       </div>
     </div>
@@ -287,6 +313,8 @@
       const viewer = document.getElementById('ar-viewer');
       const backBtn = document.getElementById('back-btn');
       const triggerArBtn = document.getElementById('trigger-ar');
+      const reclineBtn = document.getElementById('recline-btn');
+      const reclineState = { isOpen: false, isAnimating: false };
       const swatches = document.querySelectorAll('.swatch');
       const qrModal = document.getElementById('qr-modal');
       const closeQrModalBtn = document.getElementById('close-qr-modal');
@@ -387,6 +415,36 @@
         red: 1.0,
         blue: 2.6
       };
+
+      // Toggles the model's embedded "footrest" animation clip open/closed.
+      // Auto-detects the animation clip name from the model itself — no
+      // per-model configuration needed. If the loaded model has no
+      // animation clips at all, the button stays hidden and this never runs.
+      async function toggleRecline(viewerInstance, state) {
+        if (state.isAnimating) return;
+        if (!viewerInstance.availableAnimations || viewerInstance.availableAnimations.length === 0) return;
+
+        if (!viewerInstance.animationName) {
+          const preferred = viewerInstance.availableAnimations.find((name) =>
+            /foot ?rest|recline|open/i.test(name)
+          );
+          viewerInstance.animationName = preferred || viewerInstance.availableAnimations[0];
+        }
+
+        state.isAnimating = true;
+        viewerInstance.timeScale = state.isOpen ? -1 : 1; // reverse to close, forward to open
+        if (!state.isOpen) {
+          viewerInstance.currentTime = 0;
+        }
+        viewerInstance.play({ repetitions: 1 });
+
+        const durationMs = (viewerInstance.duration || 1) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, durationMs + 50));
+        viewerInstance.pause();
+
+        state.isOpen = !state.isOpen;
+        state.isAnimating = false;
+      }
 
       async function applyTexturesToViewer(viewerInstance, textureKey) {
         if (!viewerInstance.model || !viewerInstance.model.materials) return;

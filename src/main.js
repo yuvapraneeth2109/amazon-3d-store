@@ -151,7 +151,16 @@ function init() {
     const card = document.createElement('div');
     card.className = 'product-card';
     card.innerHTML = `
-      <div class="canvas-container" id="canvas-${product.id}"></div>
+      <div class="canvas-container" id="canvas-${product.id}">
+        <button
+          class="recline-btn"
+          id="recline-btn-${product.id}"
+          type="button"
+          style="display:none;position:absolute;bottom:12px;right:12px;z-index:5;align-items:center;gap:6px;background:rgba(0,0,0,0.75);backdrop-filter:blur(6px);color:#fff;border:none;border-radius:20px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;"
+        >
+          🦶 Open Footrest
+        </button>
+      </div>
       <div class="product-info">
         <h3>${product.name}</h3>
         <p class="price">${product.price}</p>
@@ -186,6 +195,10 @@ function initCard3DScene(product) {
   const width = container.clientWidth || 280;
   const height = container.clientHeight || 280;
 
+  // The recline button is absolutely positioned inside this container as an
+  // overlay, so it needs a positioning context.
+  container.style.position = 'relative';
+
   const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 1000);
 
   const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -209,6 +222,8 @@ function initCard3DScene(product) {
   scene.add(dirLight);
 
   let loadedMesh = null;
+  let mixer = null;
+  const reclineState = { isOpen: false, isAnimating: false };
 
   gltfLoader.load(
     product.modelPath,
@@ -230,6 +245,40 @@ function initCard3DScene(product) {
       camera.lookAt(0, 0, 0);
       controls.target.set(0, 0, 0);
       controls.update();
+
+      // Play the animation clip that's already baked into the .glb as-is —
+      // no picking/combining, just reference it directly via clipAction.
+      // clampWhenFinished + LoopOnce means it plays to the end and stops
+      // there (rather than looping), whichever direction timeScale is set.
+      if (gltf.animations && gltf.animations.length > 0) {
+        mixer = new THREE.AnimationMixer(loadedMesh);
+        const clip = gltf.animations[0];
+        const footrestAction = mixer.clipAction(clip);
+        footrestAction.clampWhenFinished = true;
+        footrestAction.loop = THREE.LoopOnce;
+
+        const reclineBtn = document.getElementById(`recline-btn-${product.id}`);
+        if (reclineBtn) {
+          reclineBtn.style.display = 'inline-flex';
+          reclineBtn.addEventListener('click', async () => {
+            if (reclineState.isAnimating) return;
+            reclineState.isAnimating = true;
+            reclineBtn.disabled = true;
+
+            footrestAction.paused = false;
+            footrestAction.timeScale = reclineState.isOpen ? -1 : 1;
+            footrestAction.play();
+
+            const durationMs = (clip.duration || 1) * 1000;
+            await new Promise((resolve) => setTimeout(resolve, durationMs + 50));
+
+            reclineState.isOpen = !reclineState.isOpen;
+            reclineBtn.textContent = reclineState.isOpen ? '🦶 Close Footrest' : '🦶 Open Footrest';
+            reclineBtn.disabled = false;
+            reclineState.isAnimating = false;
+          });
+        }
+      }
 
       // Only swap in our color textures for products that define `colors`.
       // Products without it (e.g. product 6) keep whatever materials/
@@ -269,8 +318,14 @@ function initCard3DScene(product) {
     });
   }
 
+  const clock = new THREE.Clock();
+
   function animate() {
     requestAnimationFrame(animate);
+    const delta = clock.getDelta();
+    if (mixer) {
+      mixer.update(delta);
+    }
     controls.update();
     renderer.render(scene, camera);
   }

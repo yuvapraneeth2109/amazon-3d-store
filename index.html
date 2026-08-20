@@ -53,6 +53,7 @@
         border-radius: 16px;
         overflow: hidden;
         margin-bottom: 20px;
+        position: relative;
       }
       model-viewer {
         width: 100%;
@@ -100,6 +101,36 @@
       }
       .swatch-blue {
         background-color: #1a365d;
+      }
+
+      .recline-btn {
+        display: none;
+        position: absolute;
+        bottom: 12px;
+        right: 12px;
+        z-index: 5;
+        align-items: center;
+        gap: 6px;
+        background: rgba(0, 0, 0, 0.75);
+        backdrop-filter: blur(6px);
+        color: #ffffff;
+        border: none;
+        border-radius: 20px;
+        padding: 8px 14px;
+        font-size: 12px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .recline-btn.visible {
+        display: inline-flex;
+      }
+      .recline-btn:hover {
+        background: rgba(0, 0, 0, 0.9);
+      }
+      .recline-btn:disabled {
+        opacity: 0.6;
+        cursor: default;
       }
       
       .action-buttons {
@@ -227,6 +258,7 @@
             min-field-of-view="35deg"
             environment-image="/HDR_Avataar_engine.hdr"
           ></model-viewer>
+          <button class="recline-btn" type="button">🦶 Open Footrest</button>
         </div>
         <h2 class="title">Nordic Accent Sofa (Model 1)</h2>
         <div class="price">$389.99</div>
@@ -257,6 +289,7 @@
             min-field-of-view="35deg"
             environment-image="/HDR_Avataar_engine.hdr"
           ></model-viewer>
+          <button class="recline-btn" type="button">🦶 Open Footrest</button>
         </div>
         <h2 class="title">Nordic Accent Sofa (Model 2)</h2>
         <div class="price">$429.99</div>
@@ -287,6 +320,7 @@
             min-field-of-view="35deg"
             environment-image="/HDR_Avataar_engine.hdr"
           ></model-viewer>
+          <button class="recline-btn" type="button">🦶 Open Footrest</button>
         </div>
         <h2 class="title">Nordic Accent Sofa (Model 3)</h2>
         <div class="price">$459.99</div>
@@ -317,6 +351,7 @@
             min-field-of-view="35deg"
             environment-image="/HDR_Avataar_engine.hdr"
           ></model-viewer>
+          <button class="recline-btn" type="button">🦶 Open Footrest</button>
         </div>
         <h2 class="title">Nordic Accent Sofa (Model 4)</h2>
         <div class="price">$499.99</div>
@@ -347,6 +382,7 @@
             min-field-of-view="35deg"
             environment-image="/HDR_Avataar_engine.hdr"
           ></model-viewer>
+          <button class="recline-btn" type="button">🦶 Open Footrest</button>
         </div>
         <h2 class="title">Nordic Accent Sofa (Model 5)</h2>
         <div class="price">$529.99</div>
@@ -377,6 +413,7 @@
             min-field-of-view="35deg"
             environment-image="/HDR_Avataar_engine.hdr"
           ></model-viewer>
+          <button class="recline-btn" type="button">🦶 Open Footrest</button>
         </div>
         <h2 class="title">New Sofa (Model 6)</h2>
         <div class="price">$0.00</div>
@@ -444,6 +481,39 @@
         blue: 2.6
       };
 
+      // Toggles the model's embedded "footrest" animation clip open/closed.
+      // `state` is a small mutable object ({ isOpen, isAnimating }) unique
+      // per card, so each product's footrest state is tracked independently.
+      // Auto-detects the animation clip name from the model itself — no
+      // per-model configuration needed. Models with no animation clips at
+      // all (e.g. product 6) simply never show this button in the first
+      // place, so this function only ever runs where one exists.
+      async function toggleRecline(viewer, state) {
+        if (state.isAnimating) return;
+        if (!viewer.availableAnimations || viewer.availableAnimations.length === 0) return;
+
+        if (!viewer.animationName) {
+          const preferred = viewer.availableAnimations.find((name) =>
+            /foot ?rest|recline|open/i.test(name)
+          );
+          viewer.animationName = preferred || viewer.availableAnimations[0];
+        }
+
+        state.isAnimating = true;
+        viewer.timeScale = state.isOpen ? -1 : 1; // reverse to close, forward to open
+        if (!state.isOpen) {
+          viewer.currentTime = 0;
+        }
+        viewer.play({ repetitions: 1 });
+
+        const durationMs = (viewer.duration || 1) * 1000;
+        await new Promise((resolve) => setTimeout(resolve, durationMs + 50));
+        viewer.pause();
+
+        state.isOpen = !state.isOpen;
+        state.isAnimating = false;
+      }
+
       async function applyTexturesToViewer(viewer, textureKey) {
         if (!viewer.model || !viewer.model.materials) return;
 
@@ -490,8 +560,10 @@
         const hasColors = swatches.length > 0;
         const btn3d = card.querySelector('.btn-3d');
         const btnAr = card.querySelector('.btn-ar');
+        const reclineBtn = card.querySelector('.recline-btn');
         const modelUrl = card.getAttribute('data-model');
         let selectedTexture = 'red';
+        const reclineState = { isOpen: false, isAnimating: false };
 
         viewer.addEventListener('camera-change', () => {
           const orbit = viewer.getCameraOrbit();
@@ -513,6 +585,14 @@
             applyTexturesToViewer(viewer, selectedTexture);
           }
           addRightFillLight(viewer);
+
+          // Only show the footrest toggle if this model actually has an
+          // animation clip baked in — auto-detected per model, no manual
+          // per-product configuration needed.
+          if (reclineBtn) {
+            const hasAnimation = viewer.availableAnimations && viewer.availableAnimations.length > 0;
+            reclineBtn.classList.toggle('visible', hasAnimation);
+          }
         });
 
         swatches.forEach(swatch => {
@@ -523,6 +603,15 @@
             await applyTexturesToViewer(viewer, selectedTexture);
           });
         });
+
+        if (reclineBtn) {
+          reclineBtn.addEventListener('click', async () => {
+            reclineBtn.disabled = true;
+            await toggleRecline(viewer, reclineState);
+            reclineBtn.textContent = reclineState.isOpen ? '🦶 Close Footrest' : '🦶 Open Footrest';
+            reclineBtn.disabled = false;
+          });
+        }
 
         btn3d.addEventListener('click', () => {
           const textureParam = hasColors ? `&texture=${selectedTexture}` : '';
